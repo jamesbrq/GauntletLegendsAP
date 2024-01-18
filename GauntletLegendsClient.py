@@ -20,15 +20,16 @@ SYSTEM_MESSAGE_ID = 0
 
 READ = "READ_CORE_RAM"
 WRITE = "WRITE_CORE_RAM"
-
 INV_ADDR = "0xC5BF0"
-OBJ_ADDR = "0xBC22C"
+OBJ_ADDR = 0xBC22C
 INV_UPDATE_ADDR = 0x56094
 INV_LAST_ADDR = 0x56084
 ACTIVE_POTION = 0xFD313
 ACTIVE_LEVEL = 0x4EFC0
 PLAYER_COUNT = 0x127764
 PLAYER_LEVEL = 0xFD31B
+PLAYER_ALIVE = 0xFD2EB
+PLAYER_PORTAL = 0xFD307
 TIME = 0xC5B1C
 INPUT = 0xC5BCD
 
@@ -168,10 +169,14 @@ class GauntletLegendsContext(CommonContext):
         self.retro_connected: bool = False
         self.level_loading: bool = False
         self.in_game: bool = False
+        self.prev_level: bytes = []
         self.objects_loaded: bool = False
         self.current_locations: List[LocationData] = []
         self.temple_clear: bool = False
         self.checked_locations_arr: List[LocationData] = []
+        self.limbo: bool = False
+        self.in_portal: bool = False
+        self.in_hell: bool = False
 
     def inv_count(self):
         for i, item in enumerate(self.inventory):
@@ -187,18 +192,24 @@ class GauntletLegendsContext(CommonContext):
         self.inventory = _inv
 
     def item_from_name(self, name: str) -> InventoryEntry | None:
-        for item in self.inventory:
-            if item.name == name:
-                return item
+        self.inv_read()
+        logger.info(f"LOOKING FOR A {name}")
+        logger.info("INV READ")
+        for i in range(0, self.inv_count()):
+            logger.info(self.inventory[i].name)
+            if self.inventory[i].name == name:
+                return self.inventory[i]
         return None
 
     def inv_bitwise(self, name: str, bit: int) -> bool:
         item = self.item_from_name(name)
+        if item is None:
+            return False
         return item.count & bit != 0
 
     def obj_read(self) -> List[ObjectEntry]:
         _obj = []
-        b = RamChunk(self.socket.read(MessageFormat(READ, f"{OBJ_ADDR} 6064")))
+        b = RamChunk(self.socket.read(MessageFormat(READ, f"0x{format(OBJ_ADDR - (self.in_hell * 0x78), 'x')} 6064")))
         b.iterate(0x3C)
         for arr in b.split:
             _obj += [ObjectEntry(arr)]
@@ -206,6 +217,8 @@ class GauntletLegendsContext(CommonContext):
 
     def inv_update(self, name: str, count: int):
         self.inv_read()
+        if "Runestone" in name:
+            name = "Runestone"
         for item in self.inventory:
             if item.name == name:
                 zero = item.count == 0
@@ -313,7 +326,9 @@ class GauntletLegendsContext(CommonContext):
         return self.socket.read(MessageFormat(READ, f"0x{format(ACTIVE_LEVEL, 'x')} 2"))
 
     def check_loading(self) -> bool:
-        return self.read_time() == 0 and self.read_input() & 0x10 == 0
+        if self.in_portal or self.level_loading:
+            return self.read_time() == 0
+        return False
 
     def active_players(self) -> int:
         return self.socket.read(MessageFormat(READ, f"0x{format(PLAYER_COUNT, 'x')} 1"))[0]
@@ -323,33 +338,50 @@ class GauntletLegendsContext(CommonContext):
 
     def level_cleared(self, level: bytes) -> bool:
         self.inv_read()
-        item = self.item_from_name("Temple")
-        if item is not None and not self.temple_clear and level[1] != 0xF:
-            return False
+        if level == self.prev_level:
+            item = self.item_from_name("Temple")
+            if item is None:
+                logger.info("ITEM IS NONE")
+            logger.info("TEMPLE")
+            if item is not None and not self.temple_clear and level[1] != 0xF:
+                return False
+        self.prev_level = level
         _id = level[0]
         if level[1] == 1:
-            _id = castle_id.index(level[0])
-        return self.inv_bitwise(levels[level[1]], 1 << _id)
+            logger.info("CASTLING")
+            logger.info(f"LEVEL ID: {level[0]}")
+            _id = castle_id.index(level[0]) + 1
+        logger.info("BITWISE")
+        logger.info(_id)
+        return self.inv_bitwise(levels[level[1]], 1 << _id - 1)
 
     def level_difficulty(self, level: bytes) -> int:
         if not self.level_cleared(level):
-            return 1
+            logger.info("UNCLEARED")
+            return self.active_players()
         return self.active_players() + self.player_level() // 10
 
     def scout_locations(self) -> List[LocationData]:
+        logger.info("LEVEL")
         level = self.read_level()
+        if level[1] == 0x8:
+            self.in_hell = True
         difficulty = self.level_difficulty(level)
+        logger.info(f"DIFFICULTY: {difficulty}")
         _id = level[0]
         if level[1] == 1:
-            _id = castle_id.index(level[0])
+            _id = castle_id.index(level[0]) + 1
+        logger.info("RAW")
         raw_locations = level_locations[(level[1] << 4) + _id]
         locations = []
         for location in raw_locations:
             if location.difficulty <= difficulty:
                 locations += [location]
+        logger.info("RETURNING")
         return locations
 
     def location_loop(self) -> List[int]:
+        logger.info("LOCATION LOOPING IT")
         new_objects = self.obj_read()[:len(self.current_locations)]
         acquired = []
         for i, obj in enumerate(new_objects):
@@ -357,13 +389,34 @@ class GauntletLegendsContext(CommonContext):
                 if self.current_locations[i] not in self.locations_checked:
                     self.locations_checked.add(self.current_locations[i].id)
                     acquired += [self.current_locations[i].id]
+        if self.dead():
+            return []
         return acquired
 
+    def portaling(self) -> int:
+        return self.socket.read(MessageFormat(READ, f"0x{format(PLAYER_PORTAL, 'x')} 1"))[0]
+
+    def dead(self) -> bool:
+        return self.socket.read(MessageFormat(READ, f"0x{format(PLAYER_ALIVE, 'x')} 1"))[0] == 0x0
+
+    def level_status(self) -> bool:
+        if self.portaling() == 0x12 or self.dead():
+            self.objects_loaded = False
+            self.current_objects = []
+            self.current_locations = []
+            self.in_game = False
+            self.level_loading = False
+            self.in_hell = False
+            return True
+        return False
+
     def load_objects(self):
-        self.current_objects = []
-        self.current_objects = self.obj_read()
-        self.objects_loaded = True
+        logger.info("SCOUTING")
         self.current_locations = self.scout_locations()
+        logger.info("FILLING ARR")
+        self.current_objects = self.obj_read()
+        logger.info("LOADED")
+        self.objects_loaded = True
 
     def run_gui(self):
         from kvui import GameManager
@@ -408,11 +461,21 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
     logger.info("Starting N64 connector. Use /n64 for status information")
     while not ctx.exit_event.is_set():
         if ctx.retro_connected:
+            logger.info("TASKING IT")
             ctx.handle_items()
+            if ctx.limbo:
+                if ctx.portaling() == 0xF:
+                    ctx.limbo = False
+                else:
+                    await asyncio.sleep(.05)
+                    continue
             if not ctx.level_loading and not ctx.in_game:
+                if not ctx.in_portal:
+                    ctx.in_portal = ctx.portaling() == 0x12
                 ctx.level_loading = ctx.check_loading()
                 await asyncio.sleep(.1)
             if ctx.level_loading:
+                ctx.in_portal = False
                 ctx.in_game = not ctx.check_loading()
                 if ctx.in_game:
                     ctx.level_loading = False
@@ -420,11 +483,16 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
             if ctx.in_game:
                 if not ctx.objects_loaded:
                     ctx.load_objects()
+                if ctx.level_status():
+                    ctx.limbo = True
+                    await asyncio.sleep(1)
+                    continue
                 checking = ctx.location_loop()
                 if checking:
                     await ctx.send_msgs([{"cmd": "LocationChecks", "locations": checking}])
-                await asyncio.sleep(.5)
+                await asyncio.sleep(.1)
         else:
+            logger.info("SLEEPING IT")
             await asyncio.sleep(1)
             continue
 

@@ -7,10 +7,11 @@ import Utils
 import settings
 from BaseClasses import MultiWorld, Item, Location
 from worlds.Files import APDeltaPatch
+from .Arrays import level_locations, level_size, level_address
 
 
 def get_base_rom_as_bytes() -> bytes:
-    with open(get_base_rom_path("Mario & Luigi - Superstar Saga (U).gba"), "rb") as infile:
+    with open(get_base_rom_path("Gauntlet Legends (U) [!].z64"), "rb") as infile:
         base_rom_bytes = bytes(infile.read())
 
     return base_rom_bytes
@@ -18,17 +19,17 @@ def get_base_rom_as_bytes() -> bytes:
 def get_base_rom_path(file_name: str = "") -> str:
     options: settings.Settings = settings.get_settings()
     if not file_name:
-        file_name = options["mlss_options"]["rom_file"]
+        file_name = options["gl_options"]["rom_file"]
     if not os.path.exists(file_name):
         file_name = Utils.user_path(file_name)
     return file_name
 
 
 class GLDeltaPatch(APDeltaPatch):
-    game = "Mario & Luigi: Superstar Saga"
-    hash = "4b1a5897d89d9e74ec7f630eefdfd435"
-    patch_file_ending = ".apmlss"
-    result_file_ending = ".gba"
+    game = "Gauntlet Legends"
+    hash = "9cb963e8b71f18568f78ec1af120362e"
+    patch_file_ending = ".apgl"
+    result_file_ending = ".z64"
 
     @classmethod
     def get_source_data(cls) -> bytes:
@@ -79,6 +80,15 @@ class Rom:
                 break
             crc32_checksum = zlib.crc32(chunk, crc32_checksum)
         return format(crc32_checksum& 0xFFFFFFFF, 'x')
+
+    def write_items(self):
+        for i, level in enumerate(level_locations.values()):
+            self.stream.seek(level_address[i], 0)
+            data = io.BytesIO(zdec(self.stream.read(level_size[i])))
+            data.seek(0x62, 0)
+            for location in level:
+                location = self.world.get_location(location.name, self.player)
+                data.write([1])
 
     def close(self, path):
         print("closing")

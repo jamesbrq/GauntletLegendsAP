@@ -49,13 +49,27 @@ class GauntletLegendsWorld(World):
         }
 
     def create_items(self) -> None:
-        for _ in all_locations:
+        self.multiworld.itempool.append(self.create_item("Runestone 1"))
+        self.multiworld.itempool.append(self.create_item("Runestone 2"))
+        self.multiworld.itempool.append(self.create_item("Runestone 3"))
+        self.multiworld.itempool.append(self.create_item("Runestone 4"))
+        self.multiworld.itempool.append(self.create_item("Runestone 5"))
+        self.multiworld.itempool.append(self.create_item("Runestone 6"))
+        self.multiworld.itempool.append(self.create_item("Runestone 7"))
+        self.multiworld.itempool.append(self.create_item("Runestone 8"))
+        self.multiworld.itempool.append(self.create_item("Runestone 9"))
+        self.multiworld.itempool.append(self.create_item("Runestone 10"))
+        self.multiworld.itempool.append(self.create_item("Runestone 11"))
+        self.multiworld.itempool.append(self.create_item("Runestone 12"))
+        self.multiworld.itempool.append(self.create_item("Runestone 13"))
+        for i, _ in enumerate(all_locations):
+            if i == len(all_locations) - 13:
+                break
             self.multiworld.itempool.append(self.create_item("Key"))
-
 
     def set_rules(self) -> None:
         self.multiworld.completion_condition[self.player] = \
-            lambda state: state.can_reach("Mountain2", "Region", self.player)
+            lambda state: state.can_reach("Gates of the Underworld", "Region", self.player)
 
     def create_item(self, name: str) -> GLItem:
         item = item_table[name]
