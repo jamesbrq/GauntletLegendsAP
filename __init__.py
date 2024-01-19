@@ -6,6 +6,16 @@ from .Locations import all_locations, location_table
 from .Items import GLItem, itemList, item_table, item_frequencies
 from .Regions import create_regions, connect_regions
 from .Rom import Rom
+from ..LauncherComponents import components, Component, launch_subprocess, Type, SuffixIdentifier
+
+
+def launch_client(*args):
+    from .GauntletLegendsClient import launch
+    launch_subprocess(launch, name="GLClient")
+
+
+components.append(Component("Gauntlet Legends Client", "GLClient", func=launch_client,
+                            component_type=Type.CLIENT, file_identifier=SuffixIdentifier(".apgl")))
 
 
 class GauntletLegendsWebWorld(WebWorld):
@@ -90,7 +100,7 @@ class GauntletLegendsWorld(World):
 
     def generate_output(self, output_directory: str) -> None:
         rom = Rom(self.multiworld, self.player)
-        self.crc32 = rom.crc32()
         rom.write_items()
+        self.crc32 = rom.crc32()
         rom.close(output_directory)
         self.output_complete.set()

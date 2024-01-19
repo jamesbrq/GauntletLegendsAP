@@ -17,9 +17,6 @@ def get_base_rom_as_bytes() -> bytes:
     return base_rom_bytes
 
 def get_base_rom_path(file_name: str = "") -> str:
-    options: settings.Settings = settings.get_settings()
-    if not file_name:
-        file_name = options["gl_options"]["rom_file"]
     if not os.path.exists(file_name):
         file_name = Utils.user_path(file_name)
     return file_name

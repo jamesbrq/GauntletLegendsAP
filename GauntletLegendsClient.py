@@ -7,11 +7,14 @@ import zipfile
 
 import bsdiff4
 
+import Patch
 import Utils
 from CommonClient import CommonContext, server_loop, gui_enabled, ClientCommandProcessor, logger, \
     get_base_parser
 from typing import List
-from worlds.gauntlet_legends.Arrays import inv_dict, timers, base_count, levels, castle_id, level_locations, difficulty_convert
+
+from worlds.gauntlet_legends.Arrays import inv_dict, timers, base_count, levels, castle_id, level_locations, \
+    difficulty_convert
 from worlds.gauntlet_legends.Rom import get_base_rom_path
 from worlds.gauntlet_legends.Items import items_by_id
 from worlds.gauntlet_legends.Locations import LocationData
@@ -337,7 +340,8 @@ class GauntletLegendsContext(CommonContext):
 
     def scale(self):
         level = self.read_level()
-        self.socket.write(MessageFormat(WRITE, f"0x{format(PLAYER_COUNT, 'x')} 0x{format(self.active_players() + (self.player_level() - difficulty_convert[level[1]]) // 10, 'x')}"))
+        self.socket.write(MessageFormat(WRITE,
+                                        f"0x{format(PLAYER_COUNT, 'x')} 0x{format(self.active_players() + (self.player_level() - difficulty_convert[level[1]]) // 10, 'x')}"))
         self.scaled = True
 
     def level_cleared(self, level: bytes) -> bool:
@@ -432,30 +436,8 @@ class GauntletLegendsContext(CommonContext):
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
 
 
-async def run_game(romfile):
-    subprocess.Popen([True, romfile], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
-async def patch_and_run_game(apgl_file):
-    base_name = os.path.splitext(apgl_file)[0]
-
-    with zipfile.ZipFile(apgl_file, 'r') as patch_archive:
-        try:
-            with patch_archive.open("delta.bsdiff4", 'r') as stream:
-                patch_data = stream.read()
-        except KeyError:
-            raise FileNotFoundError("Patch file missing from archive.")
-    rom_file = get_base_rom_path()
-
-    with open(rom_file, 'rb') as rom:
-        rom_bytes = rom.read()
-
-    patched_bytes = bsdiff4.patch(rom_bytes, patch_data)
-    patched_rom_file = base_name + ".z64"
-    with open(patched_rom_file, 'wb') as patched_rom:
-        patched_rom.write(patched_bytes)
-
-    asyncio.create_task(run_game(patched_rom_file))
+async def _patch_and_run_game(patch_file: str):
+    metadata, output_file = Patch.create_rom_file(patch_file)
 
 
 async def gl_sync_task(ctx: GauntletLegendsContext):
@@ -499,22 +481,16 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
             continue
 
 
-if __name__ == '__main__':
-    # Text Mode to use !hint and such with games that have no text entry
-    Utils.init_logging("GauntletLegendsClient", exception_logger="Client")
-
-    options = Utils.get_options()
-    DISPLAY_MSGS = options["gl_options"]["display_msgs"]
-
+def launch():
+    Utils.init_logging("GLClient", exception_logger="Client")
 
     async def main():
-        multiprocessing.freeze_support()
         parser = get_base_parser()
         parser.add_argument("patch_file", default="", type=str, nargs="?",
                             help="Path to an APGL file")
         args = parser.parse_args()
         if args.patch_file:
-            asyncio.create_task(patch_and_run_game(args.patch_file))
+            asyncio.create_task(_patch_and_run_game(args.patch_file))
         ctx = GauntletLegendsContext(args.connect, args.password)
         ctx.server_task = asyncio.create_task(server_loop(ctx), name="ServerLoop")
         if gui_enabled:
@@ -526,7 +502,6 @@ if __name__ == '__main__':
         ctx.server_address = None
 
         await ctx.shutdown()
-
 
     import colorama
 
