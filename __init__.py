@@ -1,9 +1,9 @@
 import threading
 
-from BaseClasses import Tutorial
+from BaseClasses import Tutorial, ItemClassification
 from ..AutoWorld import WebWorld, World
 from .Locations import all_locations, location_table
-from .Items import GLItem, itemList, item_table
+from .Items import GLItem, itemList, item_table, item_frequencies
 from .Regions import create_regions, connect_regions
 from .Rom import Rom
 
@@ -49,23 +49,36 @@ class GauntletLegendsWorld(World):
         }
 
     def create_items(self) -> None:
-        self.multiworld.itempool.append(self.create_item("Runestone 1"))
-        self.multiworld.itempool.append(self.create_item("Runestone 2"))
-        self.multiworld.itempool.append(self.create_item("Runestone 3"))
-        self.multiworld.itempool.append(self.create_item("Runestone 4"))
-        self.multiworld.itempool.append(self.create_item("Runestone 5"))
-        self.multiworld.itempool.append(self.create_item("Runestone 6"))
-        self.multiworld.itempool.append(self.create_item("Runestone 7"))
-        self.multiworld.itempool.append(self.create_item("Runestone 8"))
-        self.multiworld.itempool.append(self.create_item("Runestone 9"))
-        self.multiworld.itempool.append(self.create_item("Runestone 10"))
-        self.multiworld.itempool.append(self.create_item("Runestone 11"))
-        self.multiworld.itempool.append(self.create_item("Runestone 12"))
-        self.multiworld.itempool.append(self.create_item("Runestone 13"))
-        for i, _ in enumerate(all_locations):
-            if i == len(all_locations) - 13:
-                break
-            self.multiworld.itempool.append(self.create_item("Key"))
+        # First add in all progression and useful items
+        required_items = []
+        precollected = [item for item in itemList if item in self.multiworld.precollected_items[self.player]]
+        for item in itemList:
+            if item.progression != ItemClassification.filler and item.progression != ItemClassification.skip_balancing and item not in precollected:
+                freq = item_frequencies.get(item.itemName, 1)
+                if freq is None:
+                    freq = 1
+                required_items += [item.itemName for _ in range(freq)]
+
+        for itemName in required_items:
+            self.multiworld.itempool.append(self.create_item(itemName))
+
+        # Then, get a random amount of fillers until we have as many items as we have locations
+        filler_items = []
+        for item in itemList:
+            if item.progression == ItemClassification.filler:
+                freq = item_frequencies.get(item.itemName)
+                if freq is None:
+                    freq = 1
+                filler_items += [item.itemName for _ in range(freq)]
+
+        remaining = len(all_locations) - len(required_items)
+        print(remaining)
+        print(len(filler_items))
+        for i in range(remaining):
+            filler_item_name = self.multiworld.random.choice(filler_items)
+            item = self.create_item(filler_item_name)
+            self.multiworld.itempool.append(item)
+            filler_items.remove(filler_item_name)
 
     def set_rules(self) -> None:
         self.multiworld.completion_condition[self.player] = \
@@ -78,5 +91,6 @@ class GauntletLegendsWorld(World):
     def generate_output(self, output_directory: str) -> None:
         rom = Rom(self.multiworld, self.player)
         self.crc32 = rom.crc32()
+        rom.write_items()
         rom.close(output_directory)
         self.output_complete.set()

@@ -64,7 +64,7 @@ inv_dict: dict[tuple, str] = {
     (0x0, 0xC, 0x80): "Obelisk"
 }
 
-item_dict: dict[int, list[int]] = {
+item_dict: dict[int, bytes] = {
     77780000: [0x0, 0x0],
     77780001: [0x1, 0x1],
     77780002: [0x1, 0x2],
@@ -114,7 +114,8 @@ item_dict: dict[int, list[int]] = {
     77780046: [0x29, 0x2],
     77780047: [0x29, 0x3],
     77780048: [0x29, 0x4],
-    77780049: [0x29, 0x5]
+    77780049: [0x29, 0x5],
+    77780050: [0x3, 0x2]
 }
 
 timers = [
@@ -252,6 +253,7 @@ level_address = [0xF939B0,
                  0xF86B60,
                  0xF877C0,
                  0xF901C0,
+                 0xF884E0,
                  0xF89370,
                  0xF8A5F0,
                  0xF8B760,
@@ -259,3 +261,13 @@ level_address = [0xF939B0,
                  0xF8D960,
                  0xF8E6E0,
                  0xF8F110]
+
+difficulty_convert: dict[int, int] = {
+    0x7: 20,
+    0x2: 0,
+    0x1: 10,
+    0x8: 60,
+    0x9: 30,
+    0xF: 40,
+    0x11: 50
+}
