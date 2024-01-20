@@ -7,7 +7,7 @@ import Utils
 import settings
 from BaseClasses import MultiWorld, Item, Location
 from worlds.Files import APDeltaPatch
-from .Arrays import level_locations, level_size, level_address, item_dict
+from .Arrays import level_locations, level_size, level_address, item_dict, level_header
 
 
 def get_base_rom_as_bytes() -> bytes:
@@ -40,11 +40,8 @@ def zdec(data):
     decomp = zlib.decompressobj(-zlib.MAX_WBITS)
     output = bytearray()
     for i in range(0, len(data), 256):
-        print("looping")
         output.extend(decomp.decompress(data[i:i + 256]))
-    print("flushing")
     output.extend(decomp.flush())
-    print("returning")
     return output
 
 
@@ -72,6 +69,7 @@ class Rom:
         self.player = player
 
     def crc32(self, chunk_size=1024):
+        self.stream.seek(0)
         crc32_checksum = 0
         while True:
             chunk = self.stream.read(chunk_size)
@@ -87,10 +85,40 @@ class Rom:
             data.seek(0x62, 0)
             for location in level:
                 location = self.world.get_location(location.name, self.player)
-                data.write(bytes(item_dict[location.item.code]))
+                if location.item.player is not self.player:
+                    data.write(bytes([0x27, 0x4]))
+                else:
+                    data.write(bytes(item_dict[location.item.code]))
                 data.seek(10, 1)
             self.stream.seek(level_address[i], 0)
-            self.stream.write(zenc(data.getvalue()))
+            compressed = zenc(data.getvalue())
+            self.stream.seek(level_header[i] + 4, 0)
+            self.stream.write(len(compressed).to_bytes(4, byteorder='big'))
+            self.stream.seek(4, 1)
+            write_pos = 0xFA1000 + (0x1500 * i)
+            self.stream.write((write_pos - 0x636E0).to_bytes(4, byteorder='big'))
+            self.stream.seek(write_pos, 0)
+            self.stream.write(compressed)
+
+    def patch_counts(self):
+        self.stream.seek(0x67E7E0)
+        data = io.BytesIO(zdec(self.stream.read(0x380)))
+        data.seek(0x1B, 0)
+        data.write(bytes([0xFF]))
+        data.seek(0x37, 0)
+        data.write(bytes([0xFF]))
+        data.seek(0xDF, 0)
+        data.write(bytes([0xFF]))
+        data.seek(0xFB, 0)
+        data.write(bytes([0xFF]))
+        data.seek(0x117, 0)
+        data.write(bytes([0xFF]))
+        data.seek(0x133, 0)
+        data.write(bytes([0xFF]))
+        data.seek(0x53E, 0)
+        data.write(bytes([0xFF, 0xFF]))
+        self.stream.seek(0x67E7E0, 0)
+        self.stream.write(zenc(data.getvalue()))
 
     def close(self, path):
         print("closing")

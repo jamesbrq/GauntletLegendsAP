@@ -3,6 +3,7 @@ import multiprocessing
 import os
 import socket
 import subprocess
+import traceback
 import zipfile
 
 import bsdiff4
@@ -13,6 +14,7 @@ from CommonClient import CommonContext, server_loop, gui_enabled, ClientCommandP
     get_base_parser
 from typing import List
 
+from NetUtils import NetworkItem, ClientStatus
 from worlds.gauntlet_legends.Arrays import inv_dict, timers, base_count, levels, castle_id, level_locations, \
     difficulty_convert
 from worlds.gauntlet_legends.Rom import get_base_rom_path
@@ -63,7 +65,8 @@ class RetroSocket:
             data, addr = self.socket.recvfrom(1000)
         except WindowsError:
             raise Exception("Retroarch not detected. Please make sure your ROM is open in Retroarch.")
-        return data.decode()[-9:-1]
+        data = data.decode()
+        return data[data.find("crc32=") + len("crc32="):-1]
 
 
 class RamChunk:
@@ -134,22 +137,8 @@ class GauntletLegendsCommandProcessor(ClientCommandProcessor):
         if isinstance(self.ctx, GauntletLegendsContext):
             logger.info(f"N64 Status: {True}")
 
-    def _cmd_read(self):
-        chunk = RamChunk(self.ctx.socket.read("GET_STATUS"))
-        chunk.iterate(0x10)
-        inv = InventoryEntry(chunk.split[3], 3)
-
     def _cmd_inv(self, *args):
         self.ctx.inv_update(' '.join(args[:-1]), int(args[-1]))
-
-    def _cmd_refactor(self):
-        self.ctx.inv_refactor()
-
-    def _cmd_crc32(self):
-        logger.info(self.ctx.socket.crc32())
-
-    def _cmd_obj(self):
-        self.ctx.obj_read()
 
 
 class GauntletLegendsContext(CommonContext):
@@ -179,6 +168,8 @@ class GauntletLegendsContext(CommonContext):
         self.in_portal: bool = False
         self.in_hell: bool = False
         self.scaled: bool = False
+        self.offset: bool = False
+        self.scouted: bool = False
 
     def inv_count(self):
         for i, item in enumerate(self.inventory):
@@ -195,10 +186,7 @@ class GauntletLegendsContext(CommonContext):
 
     def item_from_name(self, name: str) -> InventoryEntry | None:
         self.inv_read()
-        logger.info(f"LOOKING FOR A {name}")
-        logger.info("INV READ")
-        for i in range(0, self.inv_count()):
-            logger.info(self.inventory[i].name)
+        for i in range(0, self.inv_count() + 1):
             if self.inventory[i].name == name:
                 return self.inventory[i]
         return None
@@ -211,7 +199,7 @@ class GauntletLegendsContext(CommonContext):
 
     def obj_read(self) -> List[ObjectEntry]:
         _obj = []
-        b = RamChunk(self.socket.read(MessageFormat(READ, f"0x{format(OBJ_ADDR - (self.in_hell * 0x78), 'x')} 6064")))
+        b = RamChunk(self.socket.read(MessageFormat(READ, f"0x{format(OBJ_ADDR - (self.in_hell * 0x78) + (self.offset * 0x3C), 'x')} 6064")))
         b.iterate(0x3C)
         for arr in b.split:
             _obj += [ObjectEntry(arr)]
@@ -226,7 +214,10 @@ class GauntletLegendsContext(CommonContext):
                 zero = item.count == 0
                 if name in timers:
                     count *= 96
-                item.count += count
+                if "Compass" in name:
+                    item.count = count
+                else:
+                    item.count += count
                 self.write_inv(item)
                 if zero:
                     self.inv_refactor()
@@ -303,6 +294,7 @@ class GauntletLegendsContext(CommonContext):
 
     def on_package(self, cmd: str, args: dict):
         if cmd in {"Connected"}:
+            self.slot = args['slot']
             self.glslotdata = args['slot_data']
             if self.glslotdata["crc32"] == self.socket.crc32():
                 self.retro_connected = True
@@ -312,11 +304,16 @@ class GauntletLegendsContext(CommonContext):
                 raise Exception("The loaded ROM is incorrect. Please load your patched ROM of Gauntlet Legends")
 
     def handle_items(self):
-        if self.received_index != len(self.items_received):
-            for index in range(self.received_index, len(self.items_received)):
-                item = self.items_received[index].item
-                self.inv_update(items_by_id[item].itemName, base_count[items_by_id[item].itemName])
-            self.received_index = len(self.items_received)
+        item = self.item_from_name("Compass")
+        if item is not None:
+            i = item.count
+            if i - 1 != len(self.items_received):
+                for index in range(i - 1, len(self.items_received)):
+                    item = self.items_received[index].item
+                    self.inv_update(items_by_id[item].itemName, base_count[items_by_id[item].itemName])
+            j = self.item_from_name("Compass").count
+            if j == i:
+                self.inv_update("Compass", len(self.items_received) + 1)
 
     def read_time(self) -> int:
         return int.from_bytes(self.socket.read(MessageFormat(READ, f"0x{format(TIME, 'x')} 2")), "little")
@@ -348,41 +345,30 @@ class GauntletLegendsContext(CommonContext):
         self.inv_read()
         if level == self.prev_level:
             item = self.item_from_name("Temple")
-            if item is None:
-                logger.info("ITEM IS NONE")
-            logger.info("TEMPLE")
             if item is not None and not self.temple_clear and level[1] != 0xF:
                 return False
         self.prev_level = level
         _id = level[0]
         if level[1] == 1:
-            logger.info("CASTLING")
-            logger.info(f"LEVEL ID: {level[0]}")
             _id = castle_id.index(level[0]) + 1
-        logger.info("BITWISE")
-        logger.info(_id)
         return self.inv_bitwise(levels[level[1]], 1 << _id - 1)
 
     def level_difficulty(self) -> int:
         return self.active_players()
 
     def scout_locations(self) -> List[LocationData]:
-        logger.info("LEVEL")
         level = self.read_level()
         if level[1] == 0x8:
             self.in_hell = True
         difficulty = self.level_difficulty()
-        logger.info(f"DIFFICULTY: {difficulty}")
         _id = level[0]
         if level[1] == 1:
             _id = castle_id.index(level[0]) + 1
-        logger.info("RAW")
         raw_locations = level_locations[(level[1] << 4) + _id]
         locations = []
         for location in raw_locations:
             if location.difficulty <= difficulty:
                 locations += [location]
-        logger.info("RETURNING")
         return locations
 
     def location_loop(self) -> List[int]:
@@ -412,15 +398,21 @@ class GauntletLegendsContext(CommonContext):
             self.level_loading = False
             self.in_hell = False
             self.scaled = False
+            self.offset = False
             return True
         return False
 
     def load_objects(self):
-        logger.info("SCOUTING")
         self.current_locations = self.scout_locations()
-        logger.info("FILLING ARR")
+        try:
+            self.offset = any(self.locations_info[location.id].item != self.slot for location in self.current_locations)
+        except ValueError as ve:
+            print(f"ValueError: {ve}")
+            traceback.print_exc()
+        except Exception as e:
+            print(f"An exception occurred: {e}")
+            traceback.print_exc()
         self.current_objects = self.obj_read()
-        logger.info("LOADED")
         self.objects_loaded = True
 
     def run_gui(self):
@@ -444,18 +436,22 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
     logger.info("Starting N64 connector. Use /n64 for status information")
     while not ctx.exit_event.is_set():
         if ctx.retro_connected:
+            if not ctx.scouted:
+                loc = []
+                for arr in level_locations.values():
+                    loc += [loc.id for loc in arr]
+                await ctx.send_msgs([{"cmd": "LocationScouts", "locations": loc}])
             ctx.handle_items()
             if ctx.limbo:
                 if ctx.portaling() == 0xF:
                     ctx.limbo = False
                 else:
-                    await asyncio.sleep(.05)
+                    await asyncio.sleep(.1)
                     continue
             if not ctx.level_loading and not ctx.in_game:
                 if not ctx.in_portal:
                     ctx.in_portal = ctx.portaling() == 0x12
                 ctx.level_loading = ctx.check_loading()
-                await asyncio.sleep(.1)
             if ctx.level_loading:
                 if not ctx.scaled:
                     ctx.scale()
@@ -463,7 +459,6 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
                 ctx.in_game = not ctx.check_loading()
                 if ctx.in_game:
                     ctx.level_loading = False
-                await asyncio.sleep(.1)
             if ctx.in_game:
                 if not ctx.objects_loaded:
                     ctx.load_objects()
@@ -474,9 +469,13 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
                 checking = ctx.location_loop()
                 if checking:
                     await ctx.send_msgs([{"cmd": "LocationChecks", "locations": checking}])
-                await asyncio.sleep(.1)
+                if not ctx.finished_game and ctx.inv_bitwise("Hell", 0x100):
+                    await ctx.send_msgs([{
+                        "cmd": "StatusUpdate",
+                        "status": ClientStatus.CLIENT_GOAL
+                    }])
+            await asyncio.sleep(.1)
         else:
-            logger.info("SLEEPING IT")
             await asyncio.sleep(1)
             continue
 

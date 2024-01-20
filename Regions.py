@@ -86,6 +86,13 @@ def create_regions(world: MultiWorld, player: int):
     underworld_region = create_region(world, player, "Gates of the Underworld", gatesOfTheUnderworld)
     world.regions.append(underworld_region)
 
+def runestoneCount(state, player):
+    count = 0
+    for i in range(1, 14):
+        if state.has(f"Runestone {i}", player):
+            count += 1
+    return count
+
 
 def connect_regions(world: MultiWorld, player: int):
     names: typing.Dict[str, int] = {}
@@ -96,24 +103,24 @@ def connect_regions(world: MultiWorld, player: int):
     connect(world, player, names, "Menu", "Lost Cave")
     connect(world, player, names, "Menu", "Volcanic Caverns")
     connect(world, player, names, "Menu", "Dragon's Lair")
-    connect(world, player, names, "Menu", "Castle Courtyard")
-    connect(world, player, names, "Menu", "Dungeon of Torment")
-    connect(world, player, names, "Menu", "Tower Armory")
-    connect(world, player, names, "Menu", "Castle Treasury")
-    connect(world, player, names, "Menu", "Chimera's Keep")
-    connect(world, player, names, "Menu", "Poisonous Fields")
-    connect(world, player, names, "Menu", "Haunted Cemetery")
-    connect(world, player, names, "Menu", "Venomous Spire")
-    connect(world, player, names, "Menu", "Toxic Air Ship")
-    connect(world, player, names, "Menu", "Arctic Docks")
-    connect(world, player, names, "Menu", "Frozen Camp")
-    connect(world, player, names, "Menu", "Crystal Mine")
-    connect(world, player, names, "Menu", "Erupting Fissure")
-    connect(world, player, names, "Menu", "Desecrated Temple")
-    connect(world, player, names, "Menu", "Battle Trenches")
-    connect(world, player, names, "Menu", "Battle Towers")
-    connect(world, player, names, "Menu", "Infernal Fortress")
-    connect(world, player, names, "Valley of Fire", "Gates of the Underworld",
+    connect(world, player, names, "Dragon's Lair", "Castle Courtyard", lambda state: runestoneCount(state, player) >= 3)
+    connect(world, player, names, "Castle Courtyard", "Dungeon of Torment")
+    connect(world, player, names, "Castle Courtyard", "Tower Armory")
+    connect(world, player, names, "Castle Courtyard", "Castle Treasury")
+    connect(world, player, names, "Castle Courtyard", "Chimera's Keep")
+    connect(world, player, names, "Chimera's Keep", "Poisonous Fields", lambda state: runestoneCount(state, player) >= 6)
+    connect(world, player, names, "Poisonous Fields", "Haunted Cemetery")
+    connect(world, player, names, "Poisonous Fields", "Venomous Spire")
+    connect(world, player, names, "Poisonous Fields", "Toxic Air Ship")
+    connect(world, player, names, "Toxic Air Ship", "Arctic Docks", lambda state: runestoneCount(state, player) >= 9)
+    connect(world, player, names, "Arctic Docks", "Frozen Camp")
+    connect(world, player, names, "Arctic Docks", "Crystal Mine")
+    connect(world, player, names, "Arctic Docks", "Erupting Fissure")
+    connect(world, player, names, "Erupting Fissure", "Desecrated Temple", lambda state: runestoneCount(state, player) >= 12)
+    connect(world, player, names, "Desecrated Temple", "Battle Trenches")
+    connect(world, player, names, "Desecrated Temple", "Battle Towers")
+    connect(world, player, names, "Desecrated Temple", "Infernal Fortress")
+    connect(world, player, names, "Infernal Fortress", "Gates of the Underworld",
             lambda state: state.has("Runestone 1", player) and state.has("Runestone 2", player)
             and state.has("Runestone 3", player) and state.has("Runestone 4", player)
             and state.has("Runestone 5", player) and state.has("Runestone 6", player)

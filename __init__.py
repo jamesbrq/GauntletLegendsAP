@@ -55,7 +55,8 @@ class GauntletLegendsWorld(World):
     def fill_slot_data(self) -> dict:
         self.output_complete.wait()
         return {
-            "crc32": self.crc32
+            "crc32": self.crc32,
+            "player": self.player
         }
 
     def create_items(self) -> None:
@@ -101,6 +102,7 @@ class GauntletLegendsWorld(World):
     def generate_output(self, output_directory: str) -> None:
         rom = Rom(self.multiworld, self.player)
         rom.write_items()
+        rom.patch_counts()
         self.crc32 = rom.crc32()
         rom.close(output_directory)
         self.output_complete.set()
