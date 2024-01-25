@@ -1,7 +1,8 @@
 import threading
 
 from BaseClasses import Tutorial, ItemClassification
-from ..AutoWorld import WebWorld, World
+from .Options import GLOptions
+from worlds.AutoWorld import WebWorld, World
 from .Locations import all_locations, location_table
 from .Items import GLItem, itemList, item_table, item_frequencies
 from .Regions import create_regions, connect_regions
@@ -19,12 +20,12 @@ components.append(Component("Gauntlet Legends Client", "GLClient", func=launch_c
 
 
 class GauntletLegendsWebWorld(WebWorld):
-    settings_page = "games/SADX/info/en"
+    settings_page = "games/gl/info/en"
     theme = 'partyTime'
     tutorials = [
         Tutorial(
             tutorial_name='Setup Guide',
-            description='A guide to playing Sonic Adventure DX',
+            description='A guide to playing Gauntlet Legends',
             language='English',
             file_name='setup_en.md',
             link='setup/en',
@@ -35,11 +36,13 @@ class GauntletLegendsWebWorld(WebWorld):
 
 class GauntletLegendsWorld(World):
     """
-    MLSS funny haha
+    Gauntlert Legends
     """
     game = "Gauntlet Legends"
     web = GauntletLegendsWebWorld()
     data_version = 1
+    options_dataclass = GLOptions
+    options: GLOptions
     item_name_to_id = {name: data.code for name, data in item_table.items()}
     location_name_to_id = {loc_data.name: loc_data.id for loc_data in all_locations}
     required_client_version = (0, 4, 3)
@@ -49,15 +52,21 @@ class GauntletLegendsWorld(World):
     excluded_locations: []
 
     def create_regions(self) -> None:
-        create_regions(self.multiworld, self.player)
-        connect_regions(self.multiworld, self.player)
+        create_regions(self)
+        connect_regions(self)
 
     def fill_slot_data(self) -> dict:
         self.output_complete.wait()
         return {
             "crc32": self.crc32,
-            "player": self.player
+            "player": self.player,
+            "scale": self.options.scaling_type.value
         }
+
+    def generate_basic(self) -> None:
+        item = self.create_item("Key")
+        self.multiworld.get_location("Valley of Fire - Key 1", self.player).place_locked_item(item)
+        self.multiworld.get_location("Valley of Fire - Key 5", self.player).place_locked_item(item)
 
     def create_items(self) -> None:
         # First add in all progression and useful items
@@ -82,9 +91,7 @@ class GauntletLegendsWorld(World):
                     freq = 1
                 filler_items += [item.itemName for _ in range(freq)]
 
-        remaining = len(all_locations) - len(required_items)
-        print(remaining)
-        print(len(filler_items))
+        remaining = len(all_locations) - len(required_items) - 2
         for i in range(remaining):
             filler_item_name = self.multiworld.random.choice(filler_items)
             item = self.create_item(filler_item_name)
@@ -100,7 +107,7 @@ class GauntletLegendsWorld(World):
         return GLItem(item.itemName, item.progression, item.code, self.player)
 
     def generate_output(self, output_directory: str) -> None:
-        rom = Rom(self.multiworld, self.player)
+        rom = Rom(self)
         rom.write_items()
         rom.patch_counts()
         self.crc32 = rom.crc32()

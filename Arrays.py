@@ -289,7 +289,7 @@ difficulty_convert: dict[int, int] = {
     0x7: 20,
     0x2: 0,
     0x1: 10,
-    0x8: 60,
+    0x8: 50,
     0x9: 30,
     0xF: 40,
     0x11: 50

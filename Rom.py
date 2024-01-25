@@ -8,6 +8,7 @@ import settings
 from BaseClasses import MultiWorld, Item, Location
 from worlds.Files import APDeltaPatch
 from .Arrays import level_locations, level_size, level_address, item_dict, level_header
+from worlds.AutoWorld import World
 
 
 def get_base_rom_as_bytes() -> bytes:
@@ -60,13 +61,13 @@ def zenc(data):
 
 
 class Rom:
-    def __init__(self, world: MultiWorld, player: int):
+    def __init__(self, world: "World"):
         with open("Gauntlet Legends (U) [!].z64", 'rb') as file:
             content = file.read()
-        self.random = world.per_slot_randoms[player]
+        self.random = world.multiworld.per_slot_randoms[world.player]
         self.stream = io.BytesIO(content)
         self.world = world
-        self.player = player
+        self.player = world.player
 
     def crc32(self, chunk_size=1024):
         self.stream.seek(0)
@@ -84,7 +85,7 @@ class Rom:
             data = io.BytesIO(zdec(self.stream.read(level_size[i])))
             data.seek(0x62, 0)
             for location in level:
-                location = self.world.get_location(location.name, self.player)
+                location = self.world.multiworld.get_location(location.name, self.player)
                 if location.item.player is not self.player:
                     data.write(bytes([0x27, 0x4]))
                 else:
@@ -123,11 +124,11 @@ class Rom:
     def close(self, path):
         print("closing")
         output_path = os.path.join(path,
-                                   f"AP_{self.world.seed_name}_P{self.player}_{self.world.player_name[self.player]}.z64")
+                                   f"AP_{self.world.multiworld.seed_name}_P{self.player}_{self.world.multiworld.player_name[self.player]}.z64")
         with open(output_path, 'wb') as outfile:
             outfile.write(self.stream.getvalue())
         patch = GLDeltaPatch(os.path.splitext(output_path)[0] + ".apgl", player=self.player,
-                             player_name=self.world.player_name[self.player], patched_path=output_path)
+                             player_name=self.world.multiworld.player_name[self.player], patched_path=output_path)
         patch.write()
         os.unlink(output_path)
         self.stream.close()

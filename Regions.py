@@ -1,6 +1,7 @@
 import typing
 
 from BaseClasses import MultiWorld, Region, Entrance
+from worlds.AutoWorld import World
 from .Locations import GLLocation, valleyOfFire, daggerPeak, cliffsOfDesolation, lostCave, volcanicCavern \
     , dragonsLair, castleCourtyard, dungeonOfTorment, towerArmory \
     , castleTreasury, chimerasKeep, poisonedFields, hauntedCemetery \
@@ -10,81 +11,56 @@ from .Locations import GLLocation, valleyOfFire, daggerPeak, cliffsOfDesolation,
     , gatesOfTheUnderworld
 
 
-def create_regions(world: MultiWorld, player: int):
-    menu_region = Region("Menu", player, world)
-    world.regions.append(menu_region)
+def create_regions(world: "World"):
+    world.multiworld.regions.append(Region("Menu", world.player, world.multiworld))
 
-    mountain1_region = create_region(world, player, "Valley of Fire", valleyOfFire)
-    world.regions.append(mountain1_region)
+    create_region(world, "Valley of Fire", valleyOfFire)
 
-    mountain2_region = create_region(world, player, "Dagger Peak", daggerPeak)
-    world.regions.append(mountain2_region)
+    create_region(world, "Dagger Peak", daggerPeak)
 
-    mountain3_region = create_region(world, player, "Cliffs of Desolation", cliffsOfDesolation)
-    world.regions.append(mountain3_region)
+    create_region(world, "Cliffs of Desolation", cliffsOfDesolation)
 
-    mountain4_region = create_region(world, player, "Lost Cave", lostCave)
-    world.regions.append(mountain4_region)
+    create_region(world, "Lost Cave", lostCave)
 
-    mountain5_region = create_region(world, player, "Volcanic Caverns", volcanicCavern)
-    world.regions.append(mountain5_region)
+    create_region(world, "Volcanic Caverns", volcanicCavern)
 
-    mountain6_region = create_region(world, player, "Dragon's Lair", dragonsLair)
-    world.regions.append(mountain6_region)
+    create_region(world, "Dragon's Lair", dragonsLair)
 
-    castle1_region = create_region(world, player, "Castle Courtyard", castleCourtyard)
-    world.regions.append(castle1_region)
+    create_region(world, "Castle Courtyard", castleCourtyard)
 
-    castle2_region = create_region(world, player, "Dungeon of Torment", dungeonOfTorment)
-    world.regions.append(castle2_region)
+    create_region(world, "Dungeon of Torment", dungeonOfTorment)
 
-    castle3_region = create_region(world, player, "Tower Armory", towerArmory)
-    world.regions.append(castle3_region)
+    create_region(world, "Tower Armory", towerArmory)
 
-    castle4_region = create_region(world, player, "Castle Treasury", castleTreasury)
-    world.regions.append(castle4_region)
+    create_region(world, "Castle Treasury", castleTreasury)
 
-    castle5_region = create_region(world, player, "Chimera's Keep", chimerasKeep)
-    world.regions.append(castle5_region)
+    create_region(world, "Chimera's Keep", chimerasKeep)
 
-    town1_region = create_region(world, player, "Poisonous Fields", poisonedFields)
-    world.regions.append(town1_region)
+    create_region(world, "Poisonous Fields", poisonedFields)
 
-    town2_region = create_region(world, player, "Haunted Cemetery", hauntedCemetery)
-    world.regions.append(town2_region)
+    create_region(world, "Haunted Cemetery", hauntedCemetery)
 
-    town3_region = create_region(world, player, "Venomous Spire", venomousSpire)
-    world.regions.append(town3_region)
+    create_region(world, "Venomous Spire", venomousSpire)
 
-    town4_region = create_region(world, player, "Toxic Air Ship", toxicAirShip)
-    world.regions.append(town4_region)
+    create_region(world, "Toxic Air Ship", toxicAirShip)
 
-    ice1_region = create_region(world, player, "Arctic Docks", arcticDocks)
-    world.regions.append(ice1_region)
+    create_region(world, "Arctic Docks", arcticDocks)
 
-    ice2_region = create_region(world, player, "Frozen Camp", frozenCamp)
-    world.regions.append(ice2_region)
+    create_region(world, "Frozen Camp", frozenCamp)
 
-    ice3_region = create_region(world, player, "Crystal Mine", crystalMine)
-    world.regions.append(ice3_region)
+    create_region(world, "Crystal Mine", crystalMine)
 
-    ice4_region = create_region(world, player, "Erupting Fissure", eruptingFissure)
-    world.regions.append(ice4_region)
+    create_region(world, "Erupting Fissure", eruptingFissure)
 
-    temple_region = create_region(world, player, "Desecrated Temple", desecratedTemple)
-    world.regions.append(temple_region)
+    create_region(world, "Desecrated Temple", desecratedTemple)
 
-    battle1_region = create_region(world, player, "Battle Trenches", battleTrenches)
-    world.regions.append(battle1_region)
+    create_region(world, "Battle Trenches", battleTrenches)
 
-    battle2_region = create_region(world, player, "Battle Towers", battleTowers)
-    world.regions.append(battle2_region)
+    create_region(world, "Battle Towers", battleTowers)
 
-    battle3_region = create_region(world, player, "Infernal Fortress", infernalFortress)
-    world.regions.append(battle3_region)
+    create_region(world, "Infernal Fortress", infernalFortress)
 
-    underworld_region = create_region(world, player, "Gates of the Underworld", gatesOfTheUnderworld)
-    world.regions.append(underworld_region)
+    create_region(world, "Gates of the Underworld", gatesOfTheUnderworld)
 
 def runestoneCount(state, player):
     count = 0
@@ -94,55 +70,54 @@ def runestoneCount(state, player):
     return count
 
 
-def connect_regions(world: MultiWorld, player: int):
+def connect_regions(world: "World"):
     names: typing.Dict[str, int] = {}
 
-    connect(world, player, names, "Menu", "Valley of Fire")
-    connect(world, player, names, "Menu", "Dagger Peak")
-    connect(world, player, names, "Menu", "Cliffs of Desolation")
-    connect(world, player, names, "Menu", "Lost Cave")
-    connect(world, player, names, "Menu", "Volcanic Caverns")
-    connect(world, player, names, "Menu", "Dragon's Lair")
-    connect(world, player, names, "Dragon's Lair", "Castle Courtyard", lambda state: runestoneCount(state, player) >= 3)
-    connect(world, player, names, "Castle Courtyard", "Dungeon of Torment")
-    connect(world, player, names, "Castle Courtyard", "Tower Armory")
-    connect(world, player, names, "Castle Courtyard", "Castle Treasury")
-    connect(world, player, names, "Castle Courtyard", "Chimera's Keep")
-    connect(world, player, names, "Chimera's Keep", "Poisonous Fields", lambda state: runestoneCount(state, player) >= 6)
-    connect(world, player, names, "Poisonous Fields", "Haunted Cemetery")
-    connect(world, player, names, "Poisonous Fields", "Venomous Spire")
-    connect(world, player, names, "Poisonous Fields", "Toxic Air Ship")
-    connect(world, player, names, "Toxic Air Ship", "Arctic Docks", lambda state: runestoneCount(state, player) >= 9)
-    connect(world, player, names, "Arctic Docks", "Frozen Camp")
-    connect(world, player, names, "Arctic Docks", "Crystal Mine")
-    connect(world, player, names, "Arctic Docks", "Erupting Fissure")
-    connect(world, player, names, "Erupting Fissure", "Desecrated Temple", lambda state: runestoneCount(state, player) >= 12)
-    connect(world, player, names, "Desecrated Temple", "Battle Trenches")
-    connect(world, player, names, "Desecrated Temple", "Battle Towers")
-    connect(world, player, names, "Desecrated Temple", "Infernal Fortress")
-    connect(world, player, names, "Infernal Fortress", "Gates of the Underworld",
-            lambda state: state.has("Runestone 1", player) and state.has("Runestone 2", player)
-            and state.has("Runestone 3", player) and state.has("Runestone 4", player)
-            and state.has("Runestone 5", player) and state.has("Runestone 6", player)
-            and state.has("Runestone 7", player) and state.has("Runestone 8", player)
-            and state.has("Runestone 9", player) and state.has("Runestone 10", player)
-            and state.has("Runestone 11", player) and state.has("Runestone 12", player)
-            and state.has("Runestone 13", player))
+    connect(world, names, "Menu", "Valley of Fire")
+    connect(world, names, "Menu", "Dagger Peak")
+    connect(world, names, "Menu", "Cliffs of Desolation")
+    connect(world, names, "Menu", "Lost Cave")
+    connect(world, names, "Menu", "Volcanic Caverns")
+    connect(world, names, "Menu", "Dragon's Lair")
+    connect(world, names, "Dragon's Lair", "Castle Courtyard", lambda state: runestoneCount(state, world.player) >= 3)
+    connect(world, names, "Castle Courtyard", "Dungeon of Torment")
+    connect(world, names, "Castle Courtyard", "Tower Armory")
+    connect(world, names, "Castle Courtyard", "Castle Treasury")
+    connect(world, names, "Castle Courtyard", "Chimera's Keep")
+    connect(world, names, "Chimera's Keep", "Poisonous Fields", lambda state: runestoneCount(state, world.player) >= 6)
+    connect(world, names, "Poisonous Fields", "Haunted Cemetery")
+    connect(world, names, "Poisonous Fields", "Venomous Spire")
+    connect(world, names, "Poisonous Fields", "Toxic Air Ship")
+    connect(world, names, "Toxic Air Ship", "Arctic Docks", lambda state: runestoneCount(state, world.player) >= 9)
+    connect(world, names, "Arctic Docks", "Frozen Camp")
+    connect(world, names, "Arctic Docks", "Crystal Mine")
+    connect(world, names, "Arctic Docks", "Erupting Fissure")
+    connect(world, names, "Erupting Fissure", "Desecrated Temple", lambda state: runestoneCount(state, world.player) >= 12)
+    connect(world, names, "Desecrated Temple", "Battle Trenches")
+    connect(world, names, "Desecrated Temple", "Battle Towers")
+    connect(world, names, "Desecrated Temple", "Infernal Fortress")
+    connect(world, names, "Infernal Fortress", "Gates of the Underworld",
+            lambda state: state.has("Runestone 1", world.player) and state.has("Runestone 2", world.player)
+            and state.has("Runestone 3", world.player) and state.has("Runestone 4", world.player)
+            and state.has("Runestone 5", world.player) and state.has("Runestone 6", world.player)
+            and state.has("Runestone 7", world.player) and state.has("Runestone 8", world.player)
+            and state.has("Runestone 9", world.player) and state.has("Runestone 10", world.player)
+            and state.has("Runestone 11", world.player) and state.has("Runestone 12", world.player)
+            and state.has("Runestone 13", world.player))
 
 
-def create_region(world, player, name, locations):
-    ret = Region(name, player, world)
+def create_region(world: "World", name, locations):
+    ret = Region(name, world.player, world.multiworld)
     for location in locations:
-        print(location.name)
-        loc = GLLocation(player, location.name, location.id, ret)
+        loc = GLLocation(world.player, location.name, location.id, ret)
         ret.locations.append(loc)
-    return ret
+    world.multiworld.regions.append(ret)
 
 
-def connect(world: MultiWorld, player: int, used_names: typing.Dict[str, int], source: str, target: str,
+def connect(world: "World", used_names: typing.Dict[str, int], source: str, target: str,
             rule: typing.Optional[typing.Callable] = None):
-    source_region = world.get_region(source, player)
-    target_region = world.get_region(target, player)
+    source_region = world.multiworld.get_region(source, world.player)
+    target_region = world.multiworld.get_region(target, world.player)
 
     if target not in used_names:
         used_names[target] = 1
@@ -151,7 +126,7 @@ def connect(world: MultiWorld, player: int, used_names: typing.Dict[str, int], s
         used_names[target] += 1
         name = target + (' ' * used_names[target])
 
-    connection = Entrance(player, name, source_region)
+    connection = Entrance(world.player, name, source_region)
 
     if rule:
         connection.access_rule = rule
