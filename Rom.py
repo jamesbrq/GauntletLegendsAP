@@ -8,13 +8,15 @@ import settings
 from BaseClasses import MultiWorld, Item, Location
 from worlds.Files import APDeltaPatch
 from .Arrays import level_locations, level_size, level_address, item_dict, level_header
-from worlds.AutoWorld import World
+from settings import get_settings
 
 
 def get_base_rom_as_bytes() -> bytes:
-    with open(get_base_rom_path("Gauntlet Legends (U) [!].z64"), "rb") as infile:
-        base_rom_bytes = bytes(infile.read())
-
+    try:
+        with open(get_settings().gauntlet_legends_options.rom_file, "rb") as infile:
+            base_rom_bytes = bytes(infile.read())
+    except Exception as e:
+        traceback.print_exc()
     return base_rom_bytes
 
 def get_base_rom_path(file_name: str = "") -> str:
@@ -62,12 +64,13 @@ def zenc(data):
 
 class Rom:
     def __init__(self, world: "World"):
-        with open("Gauntlet Legends (U) [!].z64", 'rb') as file:
-            content = file.read()
-        self.random = world.multiworld.per_slot_randoms[world.player]
-        self.stream = io.BytesIO(content)
-        self.world = world
-        self.player = world.player
+        try:
+            self.random = world.multiworld.per_slot_randoms[world.player]
+            self.stream = io.BytesIO(get_base_rom_as_bytes())
+            self.world = world
+            self.player = world.player
+        except Exception as e:
+            traceback.print_exc()
 
     def crc32(self, chunk_size=1024):
         self.stream.seek(0)

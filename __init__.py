@@ -1,5 +1,7 @@
 import threading
+import typing
 
+import settings
 from BaseClasses import Tutorial, ItemClassification
 from .Options import GLOptions
 from worlds.AutoWorld import WebWorld, World
@@ -7,6 +9,7 @@ from .Locations import all_locations, location_table
 from .Items import GLItem, itemList, item_table, item_frequencies
 from .Regions import create_regions, connect_regions
 from .Rom import Rom
+#  from .Rules import set_rules
 from ..LauncherComponents import components, Component, launch_subprocess, Type, SuffixIdentifier
 
 
@@ -34,18 +37,29 @@ class GauntletLegendsWebWorld(WebWorld):
     ]
 
 
+class GLSettings(settings.Group):
+    class RomFile(settings.UserFilePath):
+        """File name of the GL US rom"""
+        copy_to = "Gauntlet Legends (U) [!].z64"
+        description = "Gauntlet Legends ROM File"
+
+    rom_file: RomFile = RomFile(RomFile.copy_to)
+    rom_start: bool = False
+
+
 class GauntletLegendsWorld(World):
     """
-    Gauntlert Legends
+    Gauntlet Legends
     """
     game = "Gauntlet Legends"
     web = GauntletLegendsWebWorld()
     data_version = 1
     options_dataclass = GLOptions
     options: GLOptions
+    settings: typing.ClassVar[GLSettings]
     item_name_to_id = {name: data.code for name, data in item_table.items()}
     location_name_to_id = {loc_data.name: loc_data.id for loc_data in all_locations}
-    required_client_version = (0, 4, 3)
+    required_client_version = (0, 4, 4)
     crc32: str = None
     output_complete: threading.Event = threading.Event()
 
@@ -67,6 +81,11 @@ class GauntletLegendsWorld(World):
         item = self.create_item("Key")
         self.multiworld.get_location("Valley of Fire - Key 1", self.player).place_locked_item(item)
         self.multiworld.get_location("Valley of Fire - Key 5", self.player).place_locked_item(item)
+
+    def set_rules(self) -> None:
+        # set_rules(self, self.excluded_locations)
+        self.multiworld.completion_condition[self.player] = \
+            lambda state: state.can_reach("Gates of the Underworld", "Region", self.player)
 
     def create_items(self) -> None:
         # First add in all progression and useful items
@@ -97,10 +116,6 @@ class GauntletLegendsWorld(World):
             item = self.create_item(filler_item_name)
             self.multiworld.itempool.append(item)
             filler_items.remove(filler_item_name)
-
-    def set_rules(self) -> None:
-        self.multiworld.completion_condition[self.player] = \
-            lambda state: state.can_reach("Gates of the Underworld", "Region", self.player)
 
     def create_item(self, name: str) -> GLItem:
         item = item_table[name]
