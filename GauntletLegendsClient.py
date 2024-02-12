@@ -26,7 +26,7 @@ SYSTEM_MESSAGE_ID = 0
 
 READ = "READ_CORE_RAM"
 WRITE = "WRITE_CORE_RAM"
-INV_ADDR = "0xC5BF0"
+INV_ADDR = 0xC5BF0
 OBJ_ADDR = 0xC5B20
 INV_UPDATE_ADDR = 0x56094
 INV_LAST_ADDR = 0x56084
@@ -112,7 +112,7 @@ class InventoryEntry:
             self.on: int = arr[0]
             self.type: bytes = arr[1:4]
             self.name = type_to_name(self.type)
-            self.count: int = int.from_bytes(arr[4:6], 'little')
+            self.count: int = int.from_bytes(arr[4:8], 'little')
             self.n_addr: int = int.from_bytes(arr[12:15], 'little')
             self.p_addr: int = int.from_bytes(arr[8:11], 'little')
         else:
@@ -172,17 +172,16 @@ class GauntletLegendsContext(CommonContext):
         self.socket = RetroSocket()
         self.awaiting_rom = False
         self.inventory: List[InventoryEntry] = []
+        self.inventory_raw: RamChunk = None
         self.current_objects: List[ObjectEntry] = []
         self.retro_connected: bool = False
         self.level_loading: bool = False
         self.in_game: bool = False
         self.objects_loaded: bool = False
         self.current_locations: List[LocationData] = []
-        self.temple_clear: bool = False
         self.checked_locations_arr: List[LocationData] = []
         self.limbo: bool = False
         self.in_portal: bool = False
-        self.in_hell: bool = False
         self.scaled: bool = False
         self.offset: int = -1
         self.clear_counts = None
@@ -191,19 +190,26 @@ class GauntletLegendsContext(CommonContext):
         self.init_refactor: bool = False
 
     def inv_count(self):
-        for i, item in enumerate(self.inventory, 1):
-            if item.n_addr == 0:
-                return i
+        return len(self.inventory)
 
     def inv_read(self):
-        _inv = []
-        b = RamChunk(self.socket.read(MessageFormat(READ, f"{INV_ADDR} 1024")))
+        _inv: List[InventoryEntry] = []
+        b = RamChunk(self.socket.read(MessageFormat(READ, f"0x{format(INV_ADDR, 'x')} 1024")))
         if b is None:
             return
         b.iterate(0x10)
+        self.inventory_raw = b
         for i, arr in enumerate(b.split):
             _inv += [InventoryEntry(arr, i)]
-        self.inventory = _inv
+        new_inv: List[InventoryEntry] = []
+        new_inv += [_inv[0]]
+        addr = new_inv[0].n_addr
+        while True:
+            if addr == 0:
+                break
+            new_inv += [inv for inv in _inv if inv.addr == addr]
+            addr = new_inv[-1].n_addr
+        self.inventory = new_inv
 
     def item_from_name(self, name: str) -> InventoryEntry | None:
         self.inv_read()
@@ -252,6 +258,8 @@ class GauntletLegendsContext(CommonContext):
                     item.count = count
                 elif "Health" in name:
                     item.count = min(item.count + count, self.item_from_name("Max").count)
+                elif "Runestone" in name:
+                    item.count |= count
                 else:
                     item.count += count
                 self.write_inv(item)
@@ -261,8 +269,10 @@ class GauntletLegendsContext(CommonContext):
         logger.info(f"Adding new item to inv: {name}")
         self.inv_add(name, count)
 
-    def inv_refactor(self):
+    def inv_refactor(self, new=None):
         self.inv_read()
+        if new is not None:
+            self.inventory += [new]
         for i, item in enumerate(self.inventory):
             if item.name is not None:
                 if "Potion" in item.name and item.count != 0:
@@ -272,25 +282,32 @@ class GauntletLegendsContext(CommonContext):
             if i == 0:
                 item.p_addr = 0
                 item.n_addr = item.addr + 0x10
+                item.addr = INV_ADDR
                 self.inventory[i] = item
                 continue
+            item.addr = INV_ADDR + (0x10 * i)
             item.p_addr = item.addr - 0x10
-            if all(byte == 0 for byte in item.type):
-                self.inventory[i - 1].n_addr = 0
+            if i == len(self.inventory) - 1:
                 item.n_addr = 0
-                item.p_addr = item.addr + 0x10
                 self.inventory[i] = item
-                self.socket.write(MessageFormat(WRITE, ParamFormat(INV_UPDATE_ADDR,
-                                                                   int.to_bytes(self.inventory[i - 1].addr, 3,
-                                                                                'little'))))
-                self.socket.write(
-                    MessageFormat(WRITE, ParamFormat(INV_LAST_ADDR, int.to_bytes(item.addr, 3, 'little'))))
                 break
             item.n_addr = item.addr + 0x10
             self.inventory[i] = item
 
+        self.socket.write(MessageFormat(WRITE, ParamFormat(INV_UPDATE_ADDR,
+                                                           int.to_bytes(self.inventory[-1].addr, 3,
+                                                                        'little'))))
+        self.socket.write(
+            MessageFormat(WRITE, ParamFormat(INV_LAST_ADDR, int.to_bytes(self.inventory[-1].addr + 0x10, 3, 'little'))))
+
         for item in self.inventory:
             self.write_inv(item)
+        for i, raw in enumerate(self.inventory_raw.split[len(self.inventory):], len(self.inventory)):
+            item = InventoryEntry(raw, i)
+            if item.type != bytes([0, 0, 0]):
+                self.write_inv(InventoryEntry(bytes([0, 0, 0, 0, 0, 0, 0, 0]) + int.to_bytes(item.addr + 0x10, 3, 'little') + bytes([0xE0, 0, 0, 0, 0]), i))
+
+
         self.socket.write(f"{WRITE} 0xC6BF0 0x{format(self.inv_count(), 'x')}")
 
     def inv_add(self, name: str, count: int):
@@ -301,16 +318,13 @@ class GauntletLegendsContext(CommonContext):
         if name in timers:
             new.count *= 0x96
         new.type = name_to_type(name)
-        last = self.inventory[self.inv_count() - 1]
+        last = self.inventory[-1]
         last.n_addr = last.addr + 0x10
         new.addr = last.n_addr
-        self.inventory[self.inv_count() - 1] = last
+        self.inventory[-1] = last
         new.p_addr = last.addr
         new.n_addr = 0
-        self.inventory[self.inv_count()] = new
-        self.write_inv(last)
-        self.write_inv(new)
-        self.inv_refactor()
+        self.inv_refactor(new)
 
     def write_inv(self, item: InventoryEntry):
         b = int.to_bytes(item.on, 1) + item.type + int.to_bytes(item.count, 4, 'little') + int.to_bytes(item.p_addr, 3,
@@ -395,13 +409,14 @@ class GauntletLegendsContext(CommonContext):
 
     def scale(self):
         level = self.read_level()
+        if self.movement is not 0x12:
+            level = [0x1, 0xF]
         players = self.active_players()
         player_level = self.player_level()
         scale_value = min(self.clear_counts.get(str(level), 0), 3) if self.glslotdata["scale"] == 1 else min(max(((player_level - difficulty_convert[level[1]]) // 5), 0), 3)
         if level[1] == 2 and self.clear_counts.get(str(level), 0) != 0:
             scale_value -= min(player_level // 10, 3)
-        message = MessageFormat(WRITE, f"0x{format(PLAYER_COUNT, 'x')} 0x{format(min(players + scale_value, 4), 'x')}")
-        self.socket.write(message)
+        self.socket.write(MessageFormat(WRITE, f"0x{format(PLAYER_COUNT, 'x')} 0x{format(min(players + scale_value, 4), 'x')}"))
         self.scaled = True
 
     def scout_locations(self) -> List[LocationData]:
@@ -409,8 +424,6 @@ class GauntletLegendsContext(CommonContext):
         if self.movement is not 0x12:
             level = [0x1, 0xF]
         self.current_level = level
-        if level[1] == 0x8:
-            self.in_hell = True
         if self.clear_counts.get(str(level), 0) != 0:
             difficulty = self.active_players() + (0 if level[1] != 2 else min(self.player_level() // 10, 3))
         else:
@@ -418,7 +431,7 @@ class GauntletLegendsContext(CommonContext):
         _id = level[0]
         if level[1] == 1:
             _id = castle_id.index(level[0]) + 1
-        raw_locations = level_locations[(level[1] << 4) + _id]
+        raw_locations = level_locations.get((level[1] << 4) + _id, [])
         locations = []
         for location in raw_locations:
             if location.difficulty <= difficulty:
@@ -430,7 +443,7 @@ class GauntletLegendsContext(CommonContext):
         new_objects = self.obj_read()[:len(self.current_locations)]
         acquired = []
         for i, obj in enumerate(new_objects):
-            if obj.raw[28] != self.current_objects[i].raw[28]:
+            if obj.raw[:2] == bytes([0xAD, 0xB]):
                 if self.current_locations[i] not in self.locations_checked:
                     self.locations_checked.add(self.current_locations[i].id)
                     acquired += [self.current_locations[i].id]
@@ -462,7 +475,6 @@ class GauntletLegendsContext(CommonContext):
             self.current_locations = []
             self.in_game = False
             self.level_loading = False
-            self.in_hell = False
             self.scaled = False
             self.offset = -1
             self.movement = 0
@@ -522,8 +534,9 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
                 try:
                     if not ctx.in_portal:
                         ctx.in_portal = ctx.portaling()
-                        ctx.movement = ctx.limbo_check()
                     if ctx.in_portal and not ctx.init_refactor:
+                        await asyncio.sleep(.1)
+                        ctx.movement = ctx.limbo_check()
                         ctx.inv_refactor()
                         ctx.init_refactor = True
                     ctx.level_loading = ctx.check_loading()
