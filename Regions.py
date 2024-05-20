@@ -1,17 +1,19 @@
 import typing
 
-from BaseClasses import MultiWorld, Region, Entrance
-from worlds.AutoWorld import World
+from BaseClasses import Region, Entrance
 from .Locations import GLLocation, valleyOfFire, daggerPeak, cliffsOfDesolation, lostCave, volcanicCavern \
     , dragonsLair, castleCourtyard, dungeonOfTorment, towerArmory \
     , castleTreasury, chimerasKeep, poisonedFields, hauntedCemetery \
     , venomousSpire, toxicAirShip, arcticDocks, frozenCamp \
     , crystalMine, eruptingFissure, desecratedTemple \
     , battleTrenches, battleTowers, infernalFortress \
-    , gatesOfTheUnderworld
+    , gatesOfTheUnderworld, plagueFiend, yeti
+
+if typing.TYPE_CHECKING:
+    from . import GauntletLegendsWorld
 
 
-def create_regions(world: "World"):
+def create_regions(world: "GauntletLegendsWorld"):
     world.multiworld.regions.append(Region("Menu", world.player, world.multiworld))
 
     create_region(world, "Valley of Fire", valleyOfFire)
@@ -44,6 +46,8 @@ def create_regions(world: "World"):
 
     create_region(world, "Toxic Air Ship", toxicAirShip)
 
+    create_region(world, "Vat of the Plague Fiend", plagueFiend)
+
     create_region(world, "Arctic Docks", arcticDocks)
 
     create_region(world, "Frozen Camp", frozenCamp)
@@ -51,6 +55,8 @@ def create_regions(world: "World"):
     create_region(world, "Crystal Mine", crystalMine)
 
     create_region(world, "Erupting Fissure", eruptingFissure)
+
+    create_region(world, "Yeti", yeti)
 
     create_region(world, "Desecrated Temple", desecratedTemple)
 
@@ -62,15 +68,8 @@ def create_regions(world: "World"):
 
     create_region(world, "Gates of the Underworld", gatesOfTheUnderworld)
 
-def runestoneCount(state, player):
-    count = 0
-    for i in range(1, 14):
-        if state.has(f"Runestone {i}", player):
-            count += 1
-    return count
 
-
-def connect_regions(world: "World"):
+def connect_regions(world: "GauntletLegendsWorld"):
     names: typing.Dict[str, int] = {}
 
     connect(world, names, "Menu", "Valley of Fire")
@@ -79,24 +78,26 @@ def connect_regions(world: "World"):
     connect(world, names, "Menu", "Lost Cave")
     connect(world, names, "Menu", "Volcanic Caverns")
     connect(world, names, "Menu", "Dragon's Lair")
-    connect(world, names, "Dragon's Lair", "Castle Courtyard", lambda state: runestoneCount(state, world.player) >= 3)
+    connect(world, names, "Valley of Fire", "Castle Courtyard", lambda state: state.has("Valley of Fire Obelisk", world.player) and state.has("Dagger Peak Obelisk", world.player) and state.has("Cliffs of Desolation Obelisk", world.player))
     connect(world, names, "Castle Courtyard", "Dungeon of Torment")
     connect(world, names, "Castle Courtyard", "Tower Armory")
     connect(world, names, "Castle Courtyard", "Castle Treasury")
     connect(world, names, "Castle Courtyard", "Chimera's Keep")
-    connect(world, names, "Chimera's Keep", "Poisonous Fields", lambda state: runestoneCount(state, world.player) >= 6)
+    connect(world, names, "Valley of Fire", "Poisonous Fields", lambda state: state.has("Castle Courtyard Obelisk", world.player) and state.has("Dungeon of Torment Obelisk", world.player))
     connect(world, names, "Poisonous Fields", "Haunted Cemetery")
     connect(world, names, "Poisonous Fields", "Venomous Spire")
     connect(world, names, "Poisonous Fields", "Toxic Air Ship")
-    connect(world, names, "Toxic Air Ship", "Arctic Docks", lambda state: runestoneCount(state, world.player) >= 9)
+    connect(world, names, "Toxic Air Ship", "Vat of the Plague Fiend")
+    connect(world, names, "Valley of Fire", "Arctic Docks", lambda state: state.has("Poisoned Fields Obelisk", world.player) and state.has("Haunted Cemetery Obelisk", world.player))
     connect(world, names, "Arctic Docks", "Frozen Camp")
     connect(world, names, "Arctic Docks", "Crystal Mine")
     connect(world, names, "Arctic Docks", "Erupting Fissure")
-    connect(world, names, "Erupting Fissure", "Desecrated Temple", lambda state: runestoneCount(state, world.player) >= 12)
+    connect(world, names, "Erupting Fissure", "Yeti")
+    connect(world, names, "Valley of Fire", "Desecrated Temple", lambda state: state.has("Dragon Mirror Shard", world.player) and state.has("Chimera Mirror Shard", world.player) and state.has("Plague Fiend Mirror Shard", world.player) and state.has("Yeti Mirror Shard", world.player))
     connect(world, names, "Desecrated Temple", "Battle Trenches")
     connect(world, names, "Desecrated Temple", "Battle Towers")
     connect(world, names, "Desecrated Temple", "Infernal Fortress")
-    connect(world, names, "Infernal Fortress", "Gates of the Underworld",
+    connect(world, names, "Valley of Fire", "Gates of the Underworld",
             lambda state: state.has("Runestone 1", world.player) and state.has("Runestone 2", world.player)
             and state.has("Runestone 3", world.player) and state.has("Runestone 4", world.player)
             and state.has("Runestone 5", world.player) and state.has("Runestone 6", world.player)
@@ -106,15 +107,16 @@ def connect_regions(world: "World"):
             and state.has("Runestone 13", world.player))
 
 
-def create_region(world: "World", name, locations):
-    ret = Region(name, world.player, world.multiworld)
+def create_region(world: "GauntletLegendsWorld", name, locations):
+    reg = Region(name, world.player, world.multiworld)
     for location in locations:
-        loc = GLLocation(world.player, location.name, location.id, ret)
-        ret.locations.append(loc)
-    world.multiworld.regions.append(ret)
+        if location.name not in world.disabled_locations:
+            loc = GLLocation(world.player, location.name, location.id, reg)
+            reg.locations.append(loc)
+    world.multiworld.regions.append(reg)
 
 
-def connect(world: "World", used_names: typing.Dict[str, int], source: str, target: str,
+def connect(world: "GauntletLegendsWorld", used_names: typing.Dict[str, int], source: str, target: str,
             rule: typing.Optional[typing.Callable] = None):
     source_region = world.multiworld.get_region(source, world.player)
     target_region = world.multiworld.get_region(target, world.player)

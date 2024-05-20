@@ -1,15 +1,17 @@
+import os
 import threading
 import typing
 
 import settings
 from BaseClasses import Tutorial, ItemClassification
+from .Arrays import item_dict
 from .Options import GLOptions
 from worlds.AutoWorld import WebWorld, World
-from .Locations import all_locations, location_table
+from .Locations import all_locations, location_table, LocationData
 from .Items import GLItem, itemList, item_table, item_frequencies
 from .Regions import create_regions, connect_regions
-from .Rom import Rom
-#  from .Rules import set_rules
+from .Rom import GLProcedurePatch, write_files
+from .Rules import set_rules
 from ..LauncherComponents import components, Component, launch_subprocess, Type, SuffixIdentifier
 
 
@@ -53,46 +55,85 @@ class GauntletLegendsWorld(World):
     """
     game = "Gauntlet Legends"
     web = GauntletLegendsWebWorld()
-    data_version = 1
     options_dataclass = GLOptions
     options: GLOptions
     settings: typing.ClassVar[GLSettings]
     item_name_to_id = {name: data.code for name, data in item_table.items()}
     location_name_to_id = {loc_data.name: loc_data.id for loc_data in all_locations}
-    required_client_version = (0, 4, 4)
+    required_client_version = (0, 4, 6)
     crc32: str = None
-    output_complete: threading.Event = threading.Event()
 
-    excluded_locations: []
+    disabled_locations: typing.List[LocationData]
 
     def create_regions(self) -> None:
+        self.disabled_locations = []
+        if self.options.chests_barrels == 0:
+            self.disabled_locations += [location.name for location in all_locations if "Chest" in location.name or ("Barrel" in location.name and "Barrel of Gold" not in location.name)]
+        elif self.options.chests_barrels == 1:
+            self.disabled_locations += [location.name for location in all_locations if "Chest" in location.name]
+        elif self.options.chests_barrels == 2:
+            self.disabled_locations += [location.name for location in all_locations if "Barrel" in location.name and "Barrel of Gold" not in location.name]
+
         create_regions(self)
         connect_regions(self)
+        item = self.create_item("Key")
+        self.get_location("Valley of Fire - Key 1").place_locked_item(item)
+        self.get_location("Valley of Fire - Key 5").place_locked_item(item)
+        if self.options.obelisks == 0:
+            item = self.create_item("Valley of Fire Obelisk")
+            self.get_location("Valley of Fire - Obelisk").place_locked_item(item)
+            item = self.create_item("Dagger Peak Obelisk")
+            self.get_location("Dagger Peak - Obelisk").place_locked_item(item)
+            item = self.create_item("Cliffs of Desolation Obelisk")
+            self.get_location("Cliffs of Desolation - Obelisk").place_locked_item(item)
+            item = self.create_item("Castle Courtyard Obelisk")
+            self.get_location("Castle Courtyard - Obelisk").place_locked_item(item)
+            item = self.create_item("Dungeon of Torment Obelisk")
+            self.get_location("Dungeon of Torment - Obelisk").place_locked_item(item)
+            item = self.create_item("Poisoned Fields Obelisk")
+            self.get_location("Poisoned Fields - Obelisk").place_locked_item(item)
+            item = self.create_item("Haunted Cemetery Obelisk")
+            self.get_location("Haunted Cemetery - Obelisk").place_locked_item(item)
+        if self.options.mirror_shards == 0:
+            item = self.create_item("Dragon Mirror Shard")
+            self.get_location("Dragon's Lair - Dragon Mirror Shard").place_locked_item(item)
+            item = self.create_item("Chimera Mirror Shard")
+            self.get_location("Chimera's Keep - Chimera Mirror Shard").place_locked_item(item)
+            item = self.create_item("Plague Fiend Mirror Shard")
+            self.get_location("Vat of the Plague Fiend - Plague Fiend Mirror Shard", ).place_locked_item(item)
+            item = self.create_item("Yeti Mirror Shard")
+            self.get_location("Yeti's Cavern - Yeti Mirror Shard").place_locked_item(item)
+
 
     def fill_slot_data(self) -> dict:
-        self.output_complete.wait()
+        dshard = self.get_location("Dragon's Lair - Dragon Mirror Shard").item
+        yshard = self.get_location("Yeti's Cavern - Yeti Mirror Shard").item
+        cshard = self.get_location("Chimera's Keep - Chimera Mirror Shard").item
+        fshard = self.get_location("Vat of the Plague Fiend - Plague Fiend Mirror Shard").item
+        shard_values = [item_dict[dshard.code] if dshard.player == self.player else [0x27, 0x4],
+                        item_dict[yshard.code] if yshard.player == self.player else [0x27, 0x4],
+                        item_dict[cshard.code] if cshard.player == self.player else [0x27, 0x4],
+                        item_dict[fshard.code] if fshard.player == self.player else [0x27, 0x4]]
         return {
-            "crc32": self.crc32,
             "player": self.player,
-            "scale": self.options.scaling_type.value
+            "scale": 0,
+            "shards": shard_values,
+            "speed": self.options.permanent_speed.value,
+            "keys": self.options.infinite_keys.value,
+            "character": self.options.unlock_character.value
         }
 
-    def generate_basic(self) -> None:
-        item = self.create_item("Key")
-        self.multiworld.get_location("Valley of Fire - Key 1", self.player).place_locked_item(item)
-        self.multiworld.get_location("Valley of Fire - Key 5", self.player).place_locked_item(item)
-
-    def set_rules(self) -> None:
-        # set_rules(self, self.excluded_locations)
-        self.multiworld.completion_condition[self.player] = \
-            lambda state: state.can_reach("Gates of the Underworld", "Region", self.player)
 
     def create_items(self) -> None:
         # First add in all progression and useful items
         required_items = []
         precollected = [item for item in itemList if item in self.multiworld.precollected_items[self.player]]
         for item in itemList:
-            if item.progression != ItemClassification.filler and item.progression != ItemClassification.skip_balancing and item not in precollected:
+            if item.progression != ItemClassification.filler and item not in precollected:
+                if "Obelisk" in item.itemName and self.options.obelisks == 0:
+                    continue
+                if "Mirror" in item.itemName and self.options.mirror_shards == 0:
+                    continue
                 freq = item_frequencies.get(item.itemName, 1)
                 if freq is None:
                     freq = 1
@@ -110,21 +151,30 @@ class GauntletLegendsWorld(World):
                     freq = 1
                 filler_items += [item.itemName for _ in range(freq)]
 
-        remaining = len(all_locations) - len(required_items) - 2
+        remaining = len(all_locations) - len(required_items) - len(self.disabled_locations) - 2
+        if self.options.obelisks == 0:
+            remaining -= 7
+        if self.options.mirror_shards == 0:
+            remaining -= 4
         for i in range(remaining):
             filler_item_name = self.multiworld.random.choice(filler_items)
             item = self.create_item(filler_item_name)
             self.multiworld.itempool.append(item)
             filler_items.remove(filler_item_name)
 
+    def set_rules(self) -> None:
+        set_rules(self)
+        self.multiworld.completion_condition[self.player] = \
+            lambda state: state.can_reach("Gates of the Underworld", "Region", self.player)
+
     def create_item(self, name: str) -> GLItem:
         item = item_table[name]
         return GLItem(item.itemName, item.progression, item.code, self.player)
 
     def generate_output(self, output_directory: str) -> None:
-        rom = Rom(self)
-        rom.write_items()
-        rom.patch_counts()
-        self.crc32 = rom.crc32()
-        rom.close(output_directory)
-        self.output_complete.set()
+        patch = GLProcedurePatch(player=self.player, player_name=self.multiworld.player_name[self.player])
+        write_files(self, patch)
+        rom_path = os.path.join(
+            output_directory, f"{self.multiworld.get_out_file_name_base(self.player)}" f"{patch.patch_file_ending}"
+        )
+        patch.write(rom_path)
