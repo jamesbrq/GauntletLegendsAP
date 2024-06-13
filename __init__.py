@@ -1,47 +1,57 @@
 import os
-import threading
 import typing
 
 import settings
-from BaseClasses import Tutorial, ItemClassification
-from .Arrays import item_dict
-from .Options import GLOptions
+from BaseClasses import ItemClassification, Tutorial
+
 from worlds.AutoWorld import WebWorld, World
-from .Locations import all_locations, location_table, LocationData
-from .Items import GLItem, itemList, item_table, item_frequencies
-from .Regions import create_regions, connect_regions
-from .Rom import GLProcedurePatch, write_files
+
+from worlds.LauncherComponents import Component, SuffixIdentifier, Type, components, launch_subprocess
+from .Arrays import item_dict
+from .Items import GLItem, item_frequencies, item_list, item_table
+from .Locations import LocationData, all_locations, location_table
+from .Options import GLOptions
+from .Regions import connect_regions, create_regions
+from .Rom import GLProcedurePatch, write_files  
 from .Rules import set_rules
-from ..LauncherComponents import components, Component, launch_subprocess, Type, SuffixIdentifier
 
 
 def launch_client(*args):
     from .GauntletLegendsClient import launch
-    launch_subprocess(launch, name="GLClient")
+
+    launch_subprocess(launch, name="GauntletLegendsClient")
 
 
-components.append(Component("Gauntlet Legends Client", "GLClient", func=launch_client,
-                            component_type=Type.CLIENT, file_identifier=SuffixIdentifier(".apgl")))
+components.append(
+    Component(
+        "Gauntlet Legends Client",
+        "GauntletLegendsClient",
+        func=launch_client,
+        component_type=Type.CLIENT,
+        file_identifier=SuffixIdentifier(".apgl"),
+    ),
+)
 
 
 class GauntletLegendsWebWorld(WebWorld):
     settings_page = "games/gl/info/en"
-    theme = 'partyTime'
+    theme = "partyTime"
     tutorials = [
         Tutorial(
-            tutorial_name='Setup Guide',
-            description='A guide to playing Gauntlet Legends',
-            language='English',
-            file_name='setup_en.md',
-            link='setup/en',
-            authors=['jamesbrq']
-        )
+            tutorial_name="Setup Guide",
+            description="A guide to playing Gauntlet Legends",
+            language="English",
+            file_name="setup_en.md",
+            link="setup/en",
+            authors=["jamesbrq"],
+        ),
     ]
 
 
 class GLSettings(settings.Group):
     class RomFile(settings.UserFilePath):
         """File name of the GL US rom"""
+
         copy_to = "Gauntlet Legends (U) [!].z64"
         description = "Gauntlet Legends ROM File"
 
@@ -53,6 +63,7 @@ class GauntletLegendsWorld(World):
     """
     Gauntlet Legends
     """
+
     game = "Gauntlet Legends"
     web = GauntletLegendsWebWorld()
     options_dataclass = GLOptions
@@ -68,11 +79,23 @@ class GauntletLegendsWorld(World):
     def create_regions(self) -> None:
         self.disabled_locations = []
         if self.options.chests_barrels == 0:
-            self.disabled_locations += [location.name for location in all_locations if "Chest" in location.name or ("Barrel" in location.name and "Barrel of Gold" not in location.name)]
+            self.disabled_locations += [
+                location.name
+                for location in all_locations
+                if "Chest" in location.name or ("Barrel" in location.name and "Barrel of Gold" not in location.name)
+            ]
         elif self.options.chests_barrels == 1:
-            self.disabled_locations += [location.name for location in all_locations if "Barrel" in location.name and "Barrel of Gold" not in location.name]
+            self.disabled_locations += [
+                location.name
+                for location in all_locations
+                if "Barrel" in location.name and "Barrel of Gold" not in location.name
+            ]
         elif self.options.chests_barrels == 2:
             self.disabled_locations += [location.name for location in all_locations if "Chest" in location.name]
+
+        if self.options.max_difficulty_toggle:
+            self.disabled_locations += [location.name for location in all_locations
+                                        if location.difficulty > self.options.max_difficulty_value]
 
         create_regions(self)
         connect_regions(self)
@@ -80,19 +103,19 @@ class GauntletLegendsWorld(World):
         self.get_location("Valley of Fire - Key 1").place_locked_item(item)
         self.get_location("Valley of Fire - Key 5").place_locked_item(item)
         if self.options.obelisks == 0:
-            item = self.create_item("Valley of Fire Obelisk")
+            item = self.create_item("Mountain Obelisk 1")
             self.get_location("Valley of Fire - Obelisk").place_locked_item(item)
-            item = self.create_item("Dagger Peak Obelisk")
+            item = self.create_item("Mountain Obelisk 2")
             self.get_location("Dagger Peak - Obelisk").place_locked_item(item)
-            item = self.create_item("Cliffs of Desolation Obelisk")
+            item = self.create_item("Mountain Obelisk 3")
             self.get_location("Cliffs of Desolation - Obelisk").place_locked_item(item)
-            item = self.create_item("Castle Courtyard Obelisk")
+            item = self.create_item("Castle Obelisk 1")
             self.get_location("Castle Courtyard - Obelisk").place_locked_item(item)
-            item = self.create_item("Dungeon of Torment Obelisk")
+            item = self.create_item("Castle Obelisk 2")
             self.get_location("Dungeon of Torment - Obelisk").place_locked_item(item)
-            item = self.create_item("Poisoned Fields Obelisk")
+            item = self.create_item("Town Obelisk 1")
             self.get_location("Poisoned Fields - Obelisk").place_locked_item(item)
-            item = self.create_item("Haunted Cemetery Obelisk")
+            item = self.create_item("Town Obelisk 2")
             self.get_location("Haunted Cemetery - Obelisk").place_locked_item(item)
         if self.options.mirror_shards == 0:
             item = self.create_item("Dragon Mirror Shard")
@@ -100,58 +123,66 @@ class GauntletLegendsWorld(World):
             item = self.create_item("Chimera Mirror Shard")
             self.get_location("Chimera's Keep - Chimera Mirror Shard").place_locked_item(item)
             item = self.create_item("Plague Fiend Mirror Shard")
-            self.get_location("Vat of the Plague Fiend - Plague Fiend Mirror Shard", ).place_locked_item(item)
+            self.get_location(
+                "Vat of the Plague Fiend - Plague Fiend Mirror Shard",
+            ).place_locked_item(item)
             item = self.create_item("Yeti Mirror Shard")
             self.get_location("Yeti's Cavern - Yeti Mirror Shard").place_locked_item(item)
-
 
     def fill_slot_data(self) -> dict:
         dshard = self.get_location("Dragon's Lair - Dragon Mirror Shard").item
         yshard = self.get_location("Yeti's Cavern - Yeti Mirror Shard").item
         cshard = self.get_location("Chimera's Keep - Chimera Mirror Shard").item
         fshard = self.get_location("Vat of the Plague Fiend - Plague Fiend Mirror Shard").item
-        shard_values = [item_dict[dshard.code] if dshard.player == self.player else [0x27, 0x4],
-                        item_dict[yshard.code] if yshard.player == self.player else [0x27, 0x4],
-                        item_dict[cshard.code] if cshard.player == self.player else [0x27, 0x4],
-                        item_dict[fshard.code] if fshard.player == self.player else [0x27, 0x4]]
+        shard_values = [
+            item_dict[dshard.code] if dshard.player == self.player else [0x27, 0x4],
+            item_dict[yshard.code] if yshard.player == self.player else [0x27, 0x4],
+            item_dict[cshard.code] if cshard.player == self.player else [0x27, 0x4],
+            item_dict[fshard.code] if fshard.player == self.player else [0x27, 0x4],
+        ]
         return {
             "player": self.player,
-            "scale": 0,
             "shards": shard_values,
+            "shards_enabled": self.options.mirror_shards.value,
+            "obelisks_enabled": self.options.obelisks.value,
+            "chests_barrels": self.options.chests_barrels.value,
             "speed": self.options.permanent_speed.value,
             "keys": self.options.infinite_keys.value,
-            "character": self.options.unlock_character.value
+            "character": self.options.unlock_character.value,
+            "max": self.options.max_difficulty_value.value if self.options.max_difficulty_toggle else 4,
+            "instant_max": self.options.instant_max.value
         }
-
 
     def create_items(self) -> None:
         # First add in all progression and useful items
         required_items = []
-        precollected = [item for item in itemList if item in self.multiworld.precollected_items[self.player]]
-        for item in itemList:
+        precollected = [item for item in item_list if item in self.multiworld.precollected_items[self.player]]
+        for item in item_list:
             if item.progression != ItemClassification.filler and item not in precollected:
-                if "Obelisk" in item.itemName and self.options.obelisks == 0:
+                if "Obelisk" in item.item_name and self.options.obelisks == 0:
                     continue
-                if "Mirror" in item.itemName and self.options.mirror_shards == 0:
+                if "Mirror" in item.item_name and self.options.mirror_shards == 0:
                     continue
-                if "Key" in item.itemName and self.options.infinite_keys:
+                if "Key" in item.item_name and self.options.infinite_keys:
                     continue
-                freq = item_frequencies.get(item.itemName, 1) + (30 if self.options.infinite_keys and item.progression is ItemClassification.filler else  0)
+                freq = item_frequencies.get(item.item_name, 1) + (
+                    30 if self.options.infinite_keys and item.progression is ItemClassification.filler else 0
+                )
                 if freq is None:
                     freq = 1
-                required_items += [item.itemName for _ in range(freq)]
+                required_items += [item.item_name for _ in range(freq)]
 
-        for itemName in required_items:
-            self.multiworld.itempool.append(self.create_item(itemName))
+        for item_name in required_items:
+            self.multiworld.itempool.append(self.create_item(item_name))
 
         # Then, get a random amount of fillers until we have as many items as we have locations
         filler_items = []
-        for item in itemList:
+        for item in item_list:
             if item.progression == ItemClassification.filler:
-                freq = item_frequencies.get(item.itemName)
+                freq = item_frequencies.get(item.item_name)
                 if freq is None:
                     freq = 1
-                filler_items += [item.itemName for _ in range(freq)]
+                filler_items += [item.item_name for _ in range(freq)]
 
         remaining = len(all_locations) - len(required_items) - len(self.disabled_locations) - 2
         if self.options.obelisks == 0:
@@ -166,17 +197,18 @@ class GauntletLegendsWorld(World):
 
     def set_rules(self) -> None:
         set_rules(self)
-        self.multiworld.completion_condition[self.player] = \
-            lambda state: state.can_reach("Gates of the Underworld", "Region", self.player)
+        self.multiworld.completion_condition[self.player] = lambda state: state.can_reach(
+            "Gates of the Underworld", "Region", self.player,
+        )
 
     def create_item(self, name: str) -> GLItem:
         item = item_table[name]
-        return GLItem(item.itemName, item.progression, item.code, self.player)
+        return GLItem(item.item_name, item.progression, item.code, self.player)
 
     def generate_output(self, output_directory: str) -> None:
         patch = GLProcedurePatch(player=self.player, player_name=self.multiworld.player_name[self.player])
         write_files(self, patch)
         rom_path = os.path.join(
-            output_directory, f"{self.multiworld.get_out_file_name_base(self.player)}" f"{patch.patch_file_ending}"
+            output_directory, f"{self.multiworld.get_out_file_name_base(self.player)}{patch.patch_file_ending}",
         )
         patch.write(rom_path)

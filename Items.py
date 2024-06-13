@@ -5,7 +5,7 @@ from BaseClasses import Item, ItemClassification
 
 class ItemData(typing.NamedTuple):
     code: int
-    itemName: str
+    item_name: str
     progression: ItemClassification
 
 
@@ -13,7 +13,7 @@ class GLItem(Item):
     game: str = "Gauntlet Legends"
 
 
-itemList: typing.List[ItemData] = [
+item_list: typing.List[ItemData] = [
     ItemData(77780000, "Key", ItemClassification.filler),
     ItemData(77780001, "Lightning Potion", ItemClassification.filler),
     ItemData(77780002, "Light Potion", ItemClassification.filler),
@@ -69,13 +69,13 @@ itemList: typing.List[ItemData] = [
     ItemData(77780052, "Marker's Javelin", ItemClassification.useful),
     ItemData(77780053, "Soul Savior", ItemClassification.useful),
     ItemData(77780054, "Gold", ItemClassification.filler),
-    ItemData(77780055, "Valley of Fire Obelisk", ItemClassification.progression),
-    ItemData(77780056, "Dagger Peak Obelisk", ItemClassification.progression),
-    ItemData(77780057, "Cliffs of Desolation Obelisk", ItemClassification.progression),
-    ItemData(77780058, "Poisoned Fields Obelisk", ItemClassification.progression),
-    ItemData(77780059, "Haunted Cemetery Obelisk", ItemClassification.progression),
-    ItemData(77780060, "Castle Courtyard Obelisk", ItemClassification.progression),
-    ItemData(77780061, "Dungeon of Torment Obelisk", ItemClassification.progression),
+    ItemData(77780055, "Mountain Obelisk 1", ItemClassification.progression),
+    ItemData(77780056, "Mountain Obelisk 2", ItemClassification.progression),
+    ItemData(77780057, "Mountain Obelisk 3", ItemClassification.progression),
+    ItemData(77780058, "CastleObelisk 1", ItemClassification.progression),
+    ItemData(77780059, "Castle Obelisk 2", ItemClassification.progression),
+    ItemData(77780060, "Town Obelisk 1", ItemClassification.progression),
+    ItemData(77780061, "Town Obelisk 2", ItemClassification.progression),
 ]
 
 item_frequencies: typing.Dict[str, int] = {
@@ -110,8 +110,8 @@ item_frequencies: typing.Dict[str, int] = {
     "Invulnerability": 35,
     "Fruit": 100,
     "Meat": 100,
-    "Gold": 150
+    "Gold": 150,
 }
 
-item_table: typing.Dict[str, ItemData] = {item.itemName: item for item in itemList}
-items_by_id: typing.Dict[int, ItemData] = {item.code: item for item in itemList}
+item_table: typing.Dict[str, ItemData] = {item.item_name: item for item in item_list}
+items_by_id: typing.Dict[int, ItemData] = {item.code: item for item in item_list}

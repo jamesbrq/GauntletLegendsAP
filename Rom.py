@@ -1,16 +1,18 @@
+import io
 import json
+import os
 import traceback
 import typing
 import zlib
-import io
-import os
+from typing import Dict, List, Tuple
 
 import Utils
-from typing import List, Dict, Tuple
 from BaseClasses import Location
 from settings import get_settings
+
 from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin
-from .Arrays import level_locations, level_size, level_address, item_dict, level_header
+
+from .Arrays import item_dict, level_address, level_header, level_locations, level_size
 from .Items import items_by_id
 from .Locations import location_data
 
@@ -22,7 +24,7 @@ def get_base_rom_as_bytes() -> bytes:
     try:
         with open(get_settings().gl_options.rom_file, "rb") as infile:
             base_rom_bytes = bytes(infile.read())
-    except Exception as e:
+    except Exception:
         traceback.print_exc()
 
     return base_rom_bytes
@@ -34,6 +36,7 @@ def get_base_rom_path(file_name: str = "") -> str:
     return file_name
 
 
+# Contains header info and raw data for level item positions and rotations.
 class LevelData:
     stream: io.BytesIO
     header: bytearray
@@ -57,12 +60,13 @@ class LevelData:
         self.spawners = []
         self.objects = []
         self.chests = []
-        self.end = bytes()
+        self.end = b""
 
 
 class GLPatchExtension(APPatchExtension):
     game = "Gauntlet Legends"
 
+    # Patch max item stack values
     @staticmethod
     def patch_counts(caller: APProcedurePatch, rom: bytes) -> bytes:
         stream = io.BytesIO(rom)
@@ -98,6 +102,7 @@ class GLPatchExtension(APPatchExtension):
         stream.write(zenc(data.getvalue()))
         return stream.getvalue()
 
+    # Decompress all levels, place all items in the levels.
     @staticmethod
     def patch_items(caller: APProcedurePatch, rom: bytes):
         stream = io.BytesIO(rom)
@@ -113,9 +118,10 @@ class GLPatchExtension(APPatchExtension):
                     try:
                         index = [index for index in range(len(data.objects)) if data.objects[index][8] == 0x26][0]
                         data.items += [
-                            bytearray(data.objects[index][0:6]) + bytes(
-                                item_dict[item[0]] if item[1] == options["player"] else [0x27, 0x4]) + bytes(
-                                [0x0, 0x0, 0x0, 0x0])]
+                            bytearray(data.objects[index][0:6])
+                            + bytes(item_dict[item[0]] if item[1] == options["player"] else [0x27, 0x4])
+                            + bytes([0x0, 0x0, 0x0, 0x0]),
+                        ]
                         del data.objects[index]
                         data.item += 1
                     except Exception as e:
@@ -124,23 +130,46 @@ class GLPatchExtension(APPatchExtension):
                     continue
                 if item[1] is not options["player"]:
                     if "Chest" in location_name or (
-                            "Barrel" in location_name and "Barrel of Gold" not in location_name):
+                        "Barrel" in location_name and "Barrel of Gold" not in location_name
+                    ):
                         data.chests[j - (len(data.items) + data.obelisk)][12] = 0x27
                         data.chests[j - (len(data.items) + data.obelisk)][13] = 0x4
                     else:
                         data.items[j - data.obelisk][6] = 0x27
                         data.items[j - data.obelisk][7] = 0x4
                 else:
-                    if "Obelisk" in items_by_id[item[0]].itemName:
-                        data.objects += [bytearray(data.items[j - data.obelisk][0:6]) +
-                                         bytearray([0x0, 0x0, 0x26, 0x1, 0x0, location_data[location_name].difficulty, 0x0, 0x0, 0x0,
-                                                    item[0] - 77780054,
-                                                    0x3F, 0x80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0])]
+                    if "Obelisk" in items_by_id[item[0]].item_name:
+                        data.objects += [
+                            bytearray(data.items[j - data.obelisk][0:6])
+                            + bytearray(
+                                [
+                                    0x0,
+                                    0x0,
+                                    0x26,
+                                    0x1,
+                                    0x0,
+                                    location_data[location_name].difficulty,
+                                    0x0,
+                                    0x0,
+                                    0x0,
+                                    item[0] - 77780054,
+                                    0x3F,
+                                    0x80,
+                                    0x0,
+                                    0x0,
+                                    0x0,
+                                    0x0,
+                                    0x0,
+                                    0x0,
+                                ],
+                            ),
+                        ]
                         del data.items[j - data.obelisk]
                         data.obelisk += 1
                     else:
                         if "Chest" in location_name or (
-                                "Barrel" in location_name and "Barrel of Gold" not in location_name):
+                            "Barrel" in location_name and "Barrel of Gold" not in location_name
+                        ):
                             data.chests[j - (len(data.items) + data.obelisk)][12] = item_dict[item[0]][0]
                             data.chests[j - (len(data.items) + data.obelisk)][13] = item_dict[item[0]][1]
                         else:
@@ -149,10 +178,10 @@ class GLPatchExtension(APPatchExtension):
             uncompressed = level_data_reformat(data)
             compressed = zenc(uncompressed)
             stream.seek(level_header[i] + 4, 0)
-            stream.write(len(compressed).to_bytes(4, byteorder='big'))
-            stream.write(len(uncompressed).to_bytes(4, byteorder='big'))
+            stream.write(len(compressed).to_bytes(4, byteorder="big"))
+            stream.write(len(uncompressed).to_bytes(4, byteorder="big"))
             write_pos = 0xFA1000 + (0x1500 * i)
-            stream.write((write_pos - 0x636E0).to_bytes(4, byteorder='big'))
+            stream.write((write_pos - 0x636E0).to_bytes(4, byteorder="big"))
             stream.seek(write_pos, 0)
             stream.write(compressed)
         return stream.getvalue()
@@ -164,16 +193,15 @@ class GLProcedurePatch(APProcedurePatch, APTokenMixin):
     patch_file_ending = ".apgl"
     result_file_ending = ".z64"
 
-    procedure = [
-        ("patch_items", []),
-        ("patch_counts", [])
-    ]
+    procedure = [("patch_items", []), ("patch_counts", [])]
 
     @classmethod
     def get_source_data(cls) -> bytes:
         return get_base_rom_as_bytes()
 
 
+# Write data on all placed items into json files.
+# Also save options
 def write_files(world: "GauntletLegendsWorld", patch: GLProcedurePatch) -> None:
     options_dict = {
         "seed": world.multiworld.seed,
@@ -192,6 +220,7 @@ def locations_to_dict(locations: List[Location]) -> Dict[str, Tuple]:
     return {location.name: (location.item.code, location.item.player) for location in locations}
 
 
+# Zlib decompression with wbits set to -15
 def zdec(data):
     """
     Decompresses zlib archives used in Midway titles.
@@ -199,11 +228,12 @@ def zdec(data):
     decomp = zlib.decompressobj(-zlib.MAX_WBITS)
     output = bytearray()
     for i in range(0, len(data), 256):
-        output.extend(decomp.decompress(data[i:i + 256]))
+        output.extend(decomp.decompress(data[i : i + 256]))
     output.extend(decomp.flush())
     return output
 
 
+# Zlib compression with compression set to max and wbits set to -15
 def zenc(data):
     """
     Headerless zlib encoding scheme used across games.
@@ -213,11 +243,12 @@ def zenc(data):
     compress = zlib.compressobj(zlib.Z_BEST_COMPRESSION, zlib.DEFLATED, -zlib.MAX_WBITS)
     output = bytearray()
     for i in range(0, len(data), 256):
-        output.extend(compress.compress(data[i:i + 256]))
+        output.extend(compress.compress(data[i : i + 256]))
     output.extend(compress.flush())
     return output
 
 
+# Create a LevelData object from raw decompressed bytes of a level
 def get_level_data(stream: io.BytesIO, size: int) -> (io.BytesIO, LevelData):
     data = LevelData()
     data.stream = io.BytesIO(zdec(stream.read(size)))
@@ -249,9 +280,11 @@ def get_level_data(stream: io.BytesIO, size: int) -> (io.BytesIO, LevelData):
     return (stream, data)
 
 
+# Format a LevelData object back into a bytes object
+# Format is header, items, spawners, objects, barrels/chests, then traps.
 def level_data_reformat(data: LevelData) -> bytes:
     stream = io.BytesIO()
-    obelisk_offset = (24 * (data.obelisk - data.item))
+    obelisk_offset = 24 * (data.obelisk - data.item)
     stream.write(int.to_bytes(0x5C, 4, "big"))
     stream.write(int.to_bytes(data.spawner_addr + (12 * (data.item - data.obelisk)), 4, "big"))
     stream.write(int.to_bytes(data.spawner_addr + (12 * (data.item - data.obelisk)), 4, "big"))
