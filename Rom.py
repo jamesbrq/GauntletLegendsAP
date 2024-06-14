@@ -14,7 +14,7 @@ from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin
 
 from .Arrays import item_dict, level_address, level_header, level_locations, level_size
 from .Items import items_by_id
-from .Locations import location_data
+from .Locations import location_data, GLLocation
 
 if typing.TYPE_CHECKING:
     from . import GauntletLegendsWorld
@@ -112,6 +112,8 @@ class GLPatchExtension(APPatchExtension):
             stream.seek(level_address[i], 0)
             stream, data = get_level_data(stream, level_size[i])
             for j, (location_name, item) in enumerate(level.items()):
+                if item[0] == 0:
+                    continue
                 if "Mirror" in location_name:
                     continue
                 if "Obelisk" in location_name:
@@ -211,13 +213,15 @@ def write_files(world: "GauntletLegendsWorld", patch: GLProcedurePatch) -> None:
     for i, level in enumerate(level_locations.values()):
         locations: List[Location] = []
         for location in level:
-            if location.name not in world.disabled_locations:
+            if location.name in world.disabled_locations:
+                locations += [GLLocation(world.player, location.name, location.id)]
+            else:
                 locations += [world.get_location(location.name)]
         patch.write_file(f"level_{i}.json", json.dumps(locations_to_dict(locations)).encode("UTF-8"))
 
 
 def locations_to_dict(locations: List[Location]) -> Dict[str, Tuple]:
-    return {location.name: (location.item.code, location.item.player) for location in locations}
+    return {location.name: (location.item.code, location.item.player) if location.item is not None else (0, 0) for location in locations}
 
 
 # Zlib decompression with wbits set to -15

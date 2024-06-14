@@ -82,8 +82,6 @@ class RetroSocket:
             data, addr = self.socket.recvfrom(1000)
         except ConnectionResetError:
             raise Exception("Retroarch not detected. Please make sure your ROM is open in Retroarch.")
-        data = data.decode()
-        logger.info(data)
         return True
 
 
@@ -204,7 +202,7 @@ class GauntletLegendsContext(CommonContext):
     def inv_count(self):
         return len(self.inventory)
 
-    # Update self.inventory to current ingame values
+    # Update self.inventory to current in-game values
     async def inv_read(self):
         _inv: List[InventoryEntry] = []
         b = RamChunk(await self.socket.read(message_format(READ, f"0x{format(INV_ADDR, 'x')} 3072")))
@@ -467,9 +465,9 @@ class GauntletLegendsContext(CommonContext):
                 await self.inv_update("Key", 9000)
             temp = await self.item_from_name("Speed Boots")
             if temp is None and self.glslotdata["speed"] == 1:
-                await self.inv_update("Speed Boots", 200)
+                await self.inv_update("Speed Boots", 2000)
             i = compass.count
-            if i - 1 != len(self.items_received):
+            if i - 1 < len(self.items_received):
                 for index in range(i - 1, len(self.items_received)):
                     item = self.items_received[index].item
                     await self.inv_update(items_by_id[item].item_name, base_count[items_by_id[item].item_name])
@@ -515,7 +513,7 @@ class GauntletLegendsContext(CommonContext):
         scale_value = min(max(((player_level - difficulty_convert[level[1]]) // 5), 0), 3)
         if self.glslotdata["instant_max"] == 1:
             scale_value = max_value
-        mountain_value = min(player_level // 10, 3) if level[1] == 2 and self.clear_counts.get(str(level), 0) != 0 else 0
+        mountain_value = min(player_level // 10, 3)
         await self.socket.write(
             message_format(WRITE, f"0x{format(PLAYER_COUNT, 'x')} 0x{format(min(players + scale_value, max_value) - mountain_value, 'x')}"),
         )
@@ -720,7 +718,6 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
     while not ctx.exit_event.is_set():
         if ctx.retro_connected:
             cc_str: str = f"gl_cc_T{ctx.team}_P{ctx.slot}"
-            pl_str: str = f"gl_pl_T{ctx.team}_P{ctx.slot}"
             try:
                 ctx.set_notify(cc_str)
                 if not ctx.auth:
@@ -728,23 +725,6 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
                     continue
             except Exception:
                 logger.info(traceback.format_exc())
-            player_level = await ctx.player_level()
-            await ctx.send_msgs(
-                [
-                    {
-                        "cmd": "Set",
-                        "key": pl_str,
-                        "default": {},
-                        "want_reply": True,
-                        "operations": [
-                            {
-                                "operation": "replace",
-                                "value": player_level,
-                            },
-                        ],
-                    },
-                ],
-            )
             if ctx.limbo:
                 try:
                     limbo = await ctx.limbo_check(0x78)

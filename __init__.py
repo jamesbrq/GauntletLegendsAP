@@ -12,7 +12,7 @@ from .Items import GLItem, item_frequencies, item_list, item_table
 from .Locations import LocationData, all_locations, location_table
 from .Options import GLOptions
 from .Regions import connect_regions, create_regions
-from .Rom import GLProcedurePatch, write_files  
+from .Rom import GLProcedurePatch, write_files
 from .Rules import set_rules
 
 
@@ -99,9 +99,10 @@ class GauntletLegendsWorld(World):
 
         create_regions(self)
         connect_regions(self)
-        item = self.create_item("Key")
-        self.get_location("Valley of Fire - Key 1").place_locked_item(item)
-        self.get_location("Valley of Fire - Key 5").place_locked_item(item)
+        if not self.options.infinite_keys:
+            item = self.create_item("Key")
+            self.get_location("Valley of Fire - Key 1").place_locked_item(item)
+            self.get_location("Valley of Fire - Key 5").place_locked_item(item)
         if self.options.obelisks == 0:
             item = self.create_item("Mountain Obelisk 1")
             self.get_location("Valley of Fire - Obelisk").place_locked_item(item)
@@ -123,9 +124,7 @@ class GauntletLegendsWorld(World):
             item = self.create_item("Chimera Mirror Shard")
             self.get_location("Chimera's Keep - Chimera Mirror Shard").place_locked_item(item)
             item = self.create_item("Plague Fiend Mirror Shard")
-            self.get_location(
-                "Vat of the Plague Fiend - Plague Fiend Mirror Shard",
-            ).place_locked_item(item)
+            self.get_location("Vat of the Plague Fiend - Plague Fiend Mirror Shard").place_locked_item(item)
             item = self.create_item("Yeti Mirror Shard")
             self.get_location("Yeti's Cavern - Yeti Mirror Shard").place_locked_item(item)
 
@@ -143,9 +142,6 @@ class GauntletLegendsWorld(World):
         return {
             "player": self.player,
             "shards": shard_values,
-            "shards_enabled": self.options.mirror_shards.value,
-            "obelisks_enabled": self.options.obelisks.value,
-            "chests_barrels": self.options.chests_barrels.value,
             "speed": self.options.permanent_speed.value,
             "keys": self.options.infinite_keys.value,
             "character": self.options.unlock_character.value,
@@ -163,11 +159,7 @@ class GauntletLegendsWorld(World):
                     continue
                 if "Mirror" in item.item_name and self.options.mirror_shards == 0:
                     continue
-                if "Key" in item.item_name and self.options.infinite_keys:
-                    continue
-                freq = item_frequencies.get(item.item_name, 1) + (
-                    30 if self.options.infinite_keys and item.progression is ItemClassification.filler else 0
-                )
+                freq = item_frequencies.get(item.item_name, 1)
                 if freq is None:
                     freq = 1
                 required_items += [item.item_name for _ in range(freq)]
@@ -179,7 +171,11 @@ class GauntletLegendsWorld(World):
         filler_items = []
         for item in item_list:
             if item.progression == ItemClassification.filler:
-                freq = item_frequencies.get(item.item_name)
+                if "Key" in item.item_name and self.options.infinite_keys:
+                    continue
+                if "Boots" in item.item_name and self.options.permanent_speed:
+                    continue
+                freq = item_frequencies.get(item.item_name, 1) + (30 if self.options.infinite_keys else 0)
                 if freq is None:
                     freq = 1
                 filler_items += [item.item_name for _ in range(freq)]
