@@ -290,11 +290,9 @@ class GauntletLegendsContext(CommonContext):
             _obj += [ObjectEntry(arr)]
         _obj = [obj for obj in _obj if obj.raw[0] != 0xFF]
         if mode == 1:
-            _obj = _obj[: len(self.chest_locations)]
-            self.chest_objects = _obj
+            self.chest_objects = _obj[: len(self.chest_locations)]
         else:
-            _obj = _obj[: len(self.item_locations)]
-            self.item_objects = _obj
+            self.item_objects = _obj[: len(self.item_locations)]
 
     # Update item count of an item.
     # If the item is new, add it to your inventory
@@ -351,7 +349,7 @@ class GauntletLegendsContext(CommonContext):
                 continue
             item.addr = INV_ADDR + (0x10 * i)
             item.p_addr = item.addr - 0x10
-            if i == len(self.inventory) - 1:
+            if i == (len(self.inventory) - 1):
                 item.n_addr = 0
                 self.inventory[i] = item
                 break
@@ -387,18 +385,13 @@ class GauntletLegendsContext(CommonContext):
     # Call refactor at the end to write it into ram correctly
     async def inv_add(self, name: str, count: int):
         new = InventoryEntry()
+        new.name = name
         if name == "Key":
             new.on = 1
         new.count = count
         if name in timers:
             new.count *= 0x96
         new.type = name_to_type(name)
-        last = self.inventory[-1]
-        last.n_addr = last.addr + 0x10
-        new.addr = last.n_addr
-        self.inventory[-1] = last
-        new.p_addr = last.addr
-        new.n_addr = 0
         await self.inv_refactor(new)
 
     # Write a single item entry into RAM
@@ -408,14 +401,10 @@ class GauntletLegendsContext(CommonContext):
                 + item.type
                 + int.to_bytes(item.count, 4, "little")
                 + int.to_bytes(item.p_addr, 3, "little")
+                + (int.to_bytes(0xE0) if item.p_addr != 0 else int.to_bytes(0x0))
+                + int.to_bytes(item.n_addr, 3, "little")
+                + (int.to_bytes(0xE0) if item.n_addr != 0 else bytes())
         )
-        if item.p_addr != 0:
-            b += int.to_bytes(0xE0)
-        else:
-            b += int.to_bytes(0x0)
-        b += int.to_bytes(item.n_addr, 3, "little")
-        if item.n_addr != 0:
-            b += int.to_bytes(0xE0)
         await self.socket.write(message_format(WRITE, param_format(item.addr, b)))
 
     async def server_auth(self, password_requested: bool = False):
@@ -446,8 +435,6 @@ class GauntletLegendsContext(CommonContext):
                 self.clear_counts = cc
             else:
                 self.clear_counts = {}
-        elif cmd == "SetReply":
-            logger.info(f"Updated: {args['key']} Value: {args['value']}")
         elif cmd == "LocationInfo":
             self.location_scouts = args["locations"]
 
@@ -477,18 +464,16 @@ class GauntletLegendsContext(CommonContext):
     async def read_time(self) -> int:
         return int.from_bytes(await self.socket.read(message_format(READ, f"0x{format(TIME, 'x')} 2")), "little")
 
-    # Read player input values in RAM
-    async def read_input(self) -> int:
-        return int.from_bytes(await self.socket.read(message_format(READ, f"0x{format(INPUT, 'x')} 1")))
-
     # Read currently loaded level in RAM
     async def read_level(self) -> bytes:
-        return await self.socket.read(message_format(READ, f"0x{format(ACTIVE_LEVEL, 'x')} 2"))
+        level = await self.socket.read(message_format(READ, f"0x{format(ACTIVE_LEVEL, 'x')} 2"))
+        return level
 
     # Read value that is 1 while a level is currently loading
     async def check_loading(self) -> bool:
         if self.in_portal or self.level_loading:
-            return await self.read_time() == 0
+            time = await self.read_time()
+            return time == 0
         return False
 
     # Read number of loaded players in RAM
@@ -587,7 +572,7 @@ class GauntletLegendsContext(CommonContext):
         ]
         max_value: int = self.glslotdata['max']
         logger.info(
-            f"Locations: {len([location for location in self.obelisk_locations + self.item_locations + self.chest_locations if location.difficulty <= max_value and location.id not in self.locations_checked])} Difficulty: {max_value}",
+            f"Locations: {len([location for location in self.obelisk_locations + self.item_locations + self.chest_locations if location.difficulty <= max_value and location.id not in self.locations_checked])} Difficulty: { max_value if self.glslotdata['instant_max'] else self.difficulty}",
         )
 
     # Compare values of loaded objects to see if they have been collected
@@ -603,7 +588,8 @@ class GauntletLegendsContext(CommonContext):
                     self.locations_checked += [self.item_locations[i].id]
                     acquired += [self.item_locations[i].id]
         for j in range(len(self.obelisk_locations)):
-            if await self.inv_bitwise("Obelisk", base_count[items_by_id[self.obelisks[j].item].item_name]):
+            ob = await self.inv_bitwise("Obelisk", base_count[items_by_id[self.obelisks[j].item].item_name])
+            if ob:
                 self.locations_checked += [self.obelisk_locations[j].id]
                 acquired += [self.obelisk_locations[j].id]
         for k, obj in enumerate(self.chest_objects):
@@ -718,6 +704,7 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
     while not ctx.exit_event.is_set():
         if ctx.retro_connected:
             cc_str: str = f"gl_cc_T{ctx.team}_P{ctx.slot}"
+            pl_str: str = f"gl_pl_T{ctx.team}_P{ctx.slot}"
             try:
                 ctx.set_notify(cc_str)
                 if not ctx.auth:
@@ -725,6 +712,23 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
                     continue
             except Exception:
                 logger.info(traceback.format_exc())
+            player_level = await ctx.player_level()
+            await ctx.send_msgs(
+                [
+                    {
+                        "cmd": "Set",
+                        "key": pl_str,
+                        "default": {},
+                        "want_reply": True,
+                        "operations": [
+                            {
+                                "operation": "replace",
+                                "value": player_level,
+                            },
+                        ],
+                    },
+                ],
+            )
             if ctx.limbo:
                 try:
                     limbo = await ctx.limbo_check(0x78)
@@ -796,8 +800,10 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
                     checking = await ctx.location_loop()
                     if checking:
                         await ctx.send_msgs([{"cmd": "LocationChecks", "locations": checking}])
-                    if not ctx.finished_game and await ctx.inv_bitwise("Hell", 0x100):
+                    bitwise = await ctx.inv_bitwise("Hell", 0x100)
+                    if not ctx.finished_game and bitwise:
                         await ctx.send_msgs([{"cmd": "StatusUpdate", "status": ClientStatus.CLIENT_GOAL}])
+                        ctx.finished_game = True
                 except Exception:
                     logger.info(traceback.format_exc())
             await asyncio.sleep(0.1)

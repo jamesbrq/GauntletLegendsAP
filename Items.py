@@ -72,10 +72,10 @@ item_list: typing.List[ItemData] = [
     ItemData(77780055, "Mountain Obelisk 1", ItemClassification.progression),
     ItemData(77780056, "Mountain Obelisk 2", ItemClassification.progression),
     ItemData(77780057, "Mountain Obelisk 3", ItemClassification.progression),
-    ItemData(77780058, "Castle Obelisk 1", ItemClassification.progression),
-    ItemData(77780059, "Castle Obelisk 2", ItemClassification.progression),
-    ItemData(77780060, "Town Obelisk 1", ItemClassification.progression),
-    ItemData(77780061, "Town Obelisk 2", ItemClassification.progression),
+    ItemData(77780058, "Town Obelisk 1", ItemClassification.progression),
+    ItemData(77780059, "Town Obelisk 2", ItemClassification.progression),
+    ItemData(77780060, "Castle Obelisk 1", ItemClassification.progression),
+    ItemData(77780061, "Castle Obelisk 2", ItemClassification.progression),
 ]
 
 item_frequencies: typing.Dict[str, int] = {
