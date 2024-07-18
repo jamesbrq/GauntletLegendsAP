@@ -270,48 +270,50 @@ class GauntletLegendsContext(CommonContext):
                 await self.socket.read(
                     message_format(
                         READ,
-                        f"0x{format(obj_address + (self.offset * 0x3C), 'x')} {(len(self.item_locations) + 10) * 0x3C}",
+                        f"0x{format(obj_address + (self.offset * 0x3C), 'x')} {(len(self.item_locations) + 2) * 0x3C}",
                     ),
                 ),
             )
             b.iterate(0x3C)
             count = 0
             for obj in b.split:
-                if obj[0] == 0xFF:
+                if obj[0] == 0xFF and obj[1] == 0xFF:
                     count += 1
             self.extra_items = count
         else:
-            b = RamChunk(
-                await self.socket.read(
-                    message_format(
-                        READ,
-                        f"0x{format(obj_address + (self.offset + len(self.item_locations) + self.extra_items) * 0x3C, 'x')} {len([spawner for spawner in spawners[(self.current_level[1] << 4) + (self.current_level[0] if self.current_level[1] != 1 else castle_id.index(self.current_level[0]) + 1)] if self.difficulty >= spawner]) * 0x3C}",
-                    ),
-                ),
-            )
-            b.iterate(0x3C)
+            spawner_count = len([spawner for spawner in spawners[(self.current_level[1] << 4) + (self.current_level[0] if self.current_level[1] != 1 else castle_id.index(self.current_level[0]) + 1)] if self.difficulty >= spawner])
             count = 0
-            for obj in b.split:
-                if obj[0] == 0xFF:
-                    count += 1
+            for i in range((spawner_count + 99) // 100):
+                b = RamChunk(
+                    await self.socket.read(
+                        message_format(
+                            READ,
+                            f"0x{format(obj_address + ((self.offset + len(self.item_locations) + self.extra_items + (i * 100)) * 0x3C), 'x')} {min((spawner_count - (100 * i)), 100) * 0x3C}",
+                        ),
+                    ),
+                )
+                b.iterate(0x3C)
+                for obj in b.split:
+                    if obj[0] == 0xFF and obj[1] == 0xFF:
+                        count += 1
             self.extra_items += count
 
             b = RamChunk(
                 await self.socket.read(
                     message_format(
                         READ,
-                        f"0x{format(obj_address + ((self.offset + len(self.item_locations) + self.extra_items + len([spawner for spawner in spawners[(self.current_level[1] << 4) + (self.current_level[0] if self.current_level[1] != 1 else castle_id.index(self.current_level[0]) + 1)] if self.difficulty >= spawner])) * 0x3C), 'x')} {(len(self.chest_locations) + 10) * 0x3C}",
+                        f"0x{format(obj_address + ((self.offset + len(self.item_locations) + self.extra_items + spawner_count) * 0x3C), 'x')} {(len(self.chest_locations) + 2) * 0x3C}",
                     ),
                 ),
             )
             b.iterate(0x3C)
         for arr in b.split:
             _obj += [ObjectEntry(arr)]
-        _obj = [obj for obj in _obj if obj.raw[0] != 0xFF]
+        _obj = [obj for obj in _obj if obj.raw[0] != 0xFF and obj.raw[1] != 0xFF]
         if mode == 1:
-            self.chest_objects = _obj[: len(self.chest_locations)]
+            self.chest_objects = _obj[:len(self.chest_locations)]
         else:
-            self.item_objects = _obj[: len(self.item_locations)]
+            self.item_objects = _obj[:len(self.item_locations)]
 
     # Update item count of an item.
     # If the item is new, add it to your inventory
@@ -511,6 +513,8 @@ class GauntletLegendsContext(CommonContext):
             if i - 1 < len(self.items_received):
                 for index in range(i - 1, len(self.items_received)):
                     item = self.items_received[index].item
+                    if items_by_id[item].item_name == "Death":
+                        continue
                     await self.inv_update(items_by_id[item].item_name, base_count[items_by_id[item].item_name])
             await self.inv_update("Compass", len(self.items_received) + 1)
 
@@ -554,7 +558,7 @@ class GauntletLegendsContext(CommonContext):
             scale_value = max_value
         mountain_value = min(player_level // 10, 3)
         await self.socket.write(
-            message_format(WRITE, f"0x{format(PLAYER_COUNT, 'x')} 0x{format(min(players + scale_value, max_value) - mountain_value, 'x')}"),
+            message_format(WRITE, f"0x{format(PLAYER_COUNT, 'x')} 0x{format(min(players + scale_value, max_value), 'x')}"),
         )
         self.scaled = True
 

@@ -47,6 +47,7 @@ class LevelData:
     end_addr: int
     end_addr2: int
     end_addr3: int
+    portal_addr: int
     items: List[bytearray]
     spawners: List[bytearray]
     objects: List[bytearray]
@@ -86,6 +87,9 @@ class GLPatchExtension(APPatchExtension):
         data.write(bytes([0xFF]))
         data.seek(0x212, 0)
         data.write(bytes([0xFF, 0xFF]))
+        for i in range(25):
+            data.seek(0x1A, 1)
+            data.write(bytes([0xFF, 0xFF]))
         data.seek(0x53E, 0)
         data.write(bytes([0xFF, 0xFF]))
         data.seek(0x55A, 0)
@@ -96,8 +100,6 @@ class GLPatchExtension(APPatchExtension):
         data.write(bytes([0xFF, 0xFF]))
         data.seek(0x522, 0)
         data.write(bytes([0xFF, 0xFF]))
-        data.seek(0x96C, 0)
-        data.write(bytes([0x4, 0x3]))
         stream.seek(0x67E7E0, 0)
         stream.write(zenc(data.getvalue()))
         return stream.getvalue()
@@ -263,7 +265,7 @@ def get_level_data(stream: io.BytesIO, size: int) -> (io.BytesIO, LevelData):
     data.stream.seek(4, 1)
     data.obj_addr = int.from_bytes(data.stream.read(4), "big")
     data.end_addr = int.from_bytes(data.stream.read(4), "big")
-    data.stream.seek(4, 1)
+    data.portal_addr = int.from_bytes(data.stream.read(4), "big")
     data.chest_addr = int.from_bytes(data.stream.read(4), "big")
     data.end_addr2 = int.from_bytes(data.stream.read(4), "big")
     data.end_addr3 = int.from_bytes(data.stream.read(4), "big")
@@ -294,7 +296,7 @@ def level_data_reformat(data: LevelData) -> bytes:
     stream.write(int.to_bytes(data.spawner_addr + (12 * (data.item - data.obelisk)), 4, "big"))
     stream.write(int.to_bytes(data.obj_addr + (12 * (data.item - data.obelisk)), 4, "big"))
     stream.write(int.to_bytes(data.end_addr + ((12 * (data.item - data.obelisk)) + obelisk_offset), 4, "big"))
-    stream.write(int.to_bytes(data.end_addr + ((12 * (data.item - data.obelisk)) + obelisk_offset), 4, "big"))
+    stream.write(int.to_bytes(data.portal_addr + ((12 * (data.item - data.obelisk)) + obelisk_offset), 4, "big"))
     stream.write(int.to_bytes(data.chest_addr + ((12 * (data.item - data.obelisk)) + obelisk_offset), 4, "big"))
     stream.write(int.to_bytes(data.end_addr2 + ((12 * (data.item - data.obelisk)) + obelisk_offset), 4, "big"))
     stream.write(int.to_bytes(data.end_addr3 + ((12 * (data.item - data.obelisk)) + obelisk_offset), 4, "big"))
