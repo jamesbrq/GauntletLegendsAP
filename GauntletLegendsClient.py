@@ -164,6 +164,13 @@ class GauntletLegendsCommandProcessor(ClientCommandProcessor):
         self.ctx.deathlink_enabled = not self.ctx.deathlink_enabled
         logger.info(f"Deathlink {'Enabled.' if self.ctx.deathlink_enabled else 'Disabled.'}")
 
+    def _cmd_players(self, value: int):
+        """Set number of local players"""
+        if type(value) is not int:
+            logger.info(f"Invalid Parameters. Usage: /players [number]")
+        self.ctx.players = min(value, 4)
+        logger.info(f"Players set to {min(value, 4)}.")
+
 
 class GauntletLegendsContext(CommonContext):
     command_processor = GauntletLegendsCommandProcessor
@@ -491,7 +498,6 @@ class GauntletLegendsContext(CommonContext):
             self.glslotdata = args["slot_data"]
             if self.socket.status():
                 self.retro_connected = True
-                self.players = self.glslotdata["players"]
                 self.deathlink_enabled = self.glslotdata["death_link"]
             else:
                 raise Exception("Retroarch not detected. Please open you patched ROM in Retroarch.")
@@ -575,11 +581,11 @@ class GauntletLegendsContext(CommonContext):
             level = [0x1, 0xF]
         players = await self.active_players()
         player_level = await self.player_level()
-        max_value: int = self.glslotdata["max"]
+        max_value: int = max(self.glslotdata["max"], self.players)
         scale_value = min(max(((player_level - difficulty_convert[level[1]]) // 5), 0), 3)
         if self.glslotdata["instant_max"] == 1:
             scale_value = max_value
-        mountain_value = min(player_level // 10, 3)
+        # mountain_value = min(player_level // 10, 3)
         await self.socket.write(
             message_format(WRITE, f"0x{format(PLAYER_COUNT, 'x')} 0x{format(min(players + scale_value, max_value), 'x')}"),
         )
@@ -619,8 +625,6 @@ class GauntletLegendsContext(CommonContext):
                     "locations": [
                         location.id
                         for location in raw_locations
-                        if "Chest" not in location.name
-                           and ("Barrel" not in location.name or "Barrel of Gold" in location.name)
                     ],
                     "create_as_hint": 0,
                 },
@@ -664,7 +668,7 @@ class GauntletLegendsContext(CommonContext):
         await self.obj_read(1)
         acquired = []
         for i, obj in enumerate(self.item_objects):
-            if obj.raw[:2] == bytes([0xAD, 0xB]):
+            if obj.raw[24] != 0x0:
                 if self.item_locations[i].id not in self.locations_checked:
                     self.locations_checked += [self.item_locations[i].id]
                     acquired += [self.item_locations[i].id]
@@ -675,7 +679,7 @@ class GauntletLegendsContext(CommonContext):
                 acquired += [self.obelisk_locations[j].id]
         for k, obj in enumerate(self.chest_objects):
             if "Chest" in self.chest_locations[k].name:
-                if obj.raw[:2] == bytes([0xAD, 0xB]):
+                if obj.raw[24] != 0x0:
                     if self.chest_locations[k].id not in self.locations_checked:
                         self.locations_checked += [self.chest_locations[k].id]
                         acquired += [self.chest_locations[k].id]
@@ -701,7 +705,7 @@ class GauntletLegendsContext(CommonContext):
     # Returns True of the player is dead
     async def dead(self) -> bool:
         temp = await self.socket.read(message_format(READ, f"0x{format(PLAYER_KILL, 'x')} 1"))
-        return (temp[0] & 0x8) == 0x8
+        return ((temp[0] & 0x8) == 0x8 or (temp[0] | 0xFF) == 0x1)
 
     # Returns a number that tells if the player is fighting a boss currently
     async def boss(self) -> int:
@@ -799,6 +803,7 @@ async def _patch_and_run_game(patch_file: str):
 # Checks location status inside of levels
 async def gl_sync_task(ctx: GauntletLegendsContext):
     logger.info("Starting N64 connector...")
+    logger.info("Use /players to set the number of people playing locally. This is required for the client to function.")
     while not ctx.exit_event.is_set():
         if ctx.retro_connected:
             cc_str: str = f"gl_cc_T{ctx.team}_P{ctx.slot}"
