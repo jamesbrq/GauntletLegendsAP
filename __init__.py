@@ -2,7 +2,7 @@ import os
 import typing
 
 import settings
-from BaseClasses import ItemClassification, Tutorial, Item
+from BaseClasses import ItemClassification, Tutorial
 from Fill import fast_fill
 
 from worlds.AutoWorld import WebWorld, World
@@ -73,7 +73,6 @@ class GauntletLegendsWorld(World):
     item_name_to_id = {name: data.code for name, data in item_table.items()}
     location_name_to_id = {loc_data.name: loc_data.id for loc_data in all_locations}
     required_client_version = (0, 5, 0)
-    death: typing.List[Item] = []
     crc32: str = None
 
     disabled_locations: typing.List[LocationData]
@@ -162,7 +161,7 @@ class GauntletLegendsWorld(World):
             "characters": characters,
             "max": (self.options.max_difficulty_value.value if self.options.max_difficulty_toggle else 4),
             "instant_max": self.options.instant_max.value,
-            "death_link": self.options.death_link.value == 1
+            "death_link": bool((self.options.death_link.value == 1))
         }
 
     def create_items(self) -> None:
@@ -215,9 +214,6 @@ class GauntletLegendsWorld(World):
         for i in range(remaining):
             filler_item_name = self.multiworld.random.choice(filler_items)
             item = self.create_item(filler_item_name)
-            if "Death" in filler_item_name:
-                self.death += [item]
-                continue
             self.multiworld.itempool.append(item)
             filler_items.remove(filler_item_name)
 
@@ -228,10 +224,10 @@ class GauntletLegendsWorld(World):
         )
 
     def pre_fill(self) -> None:
-        if len(self.death) != 0:
-            locations = self.multiworld.get_unfilled_locations(self.player)
-            self.random.shuffle(locations)
-            fast_fill(self.multiworld, self.death, locations)
+        locations = self.multiworld.get_unfilled_locations(self.player)
+        items = [item for item in self.multiworld.itempool if item.name == "Death" and item.player == self.player]
+        self.random.shuffle(locations)
+        fast_fill(self.multiworld, items, locations)
 
     def create_item(self, name: str) -> GLItem:
         item = item_table[name]
