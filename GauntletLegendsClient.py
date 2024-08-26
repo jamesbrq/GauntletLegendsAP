@@ -19,7 +19,7 @@ from .Arrays import (
     level_locations,
     mirror_levels,
     spawners,
-    timers, sounds, colors,
+    timers, sounds, colors, vanilla,
 )
 from .Items import ItemData, items_by_id
 from .Locations import LocationData
@@ -27,7 +27,7 @@ from .Locations import LocationData
 READ = "READ_CORE_RAM"
 WRITE = "WRITE_CORE_RAM"
 INV_ADDR = 0xC5BF0
-OBJ_ADDR = 0xC5B20
+OBJ_ADDR = 0xBC22C
 INV_UPDATE_ADDR = 0x56094
 INV_LAST_ADDR = 0x56084
 ACTIVE_POTION = 0xFD313
@@ -176,6 +176,7 @@ class GauntletLegendsContext(CommonContext):
 
     def __init__(self, server_address, password):
         super().__init__(server_address, password)
+        self.useful: List[NetworkItem] = []
         self.deathlink_pending: bool = False
         self.deathlink_enabled: bool = False
         self.deathlink_triggered: bool = False
@@ -202,6 +203,7 @@ class GauntletLegendsContext(CommonContext):
         self.obelisk_locations: List[LocationData] = []
         self.chest_locations: List[LocationData] = []
         self.extra_items: int = 0
+        self.extra_spawners: int = 0
         self.limbo: bool = False
         self.in_portal: bool = False
         self.scaled: bool = False
@@ -273,60 +275,59 @@ class GauntletLegendsContext(CommonContext):
     # Objects are 0x3C bytes long
     # Modes: 0 = items, 1 = chests/barrels
     async def obj_read(self, mode=0):
-        obj_address = await self.get_obj_addr()
         _obj = []
-        if self.offset == -1:
-            b = RamChunk(await self.socket.read(message_format(READ, f"0x{format(obj_address, 'x')} 3840")))
-            b.iterate(0x3C)
-            for i, arr in enumerate(b.split):
-                if arr[0] != 0xFF:
-                    self.offset = i
-                    break
         b: RamChunk
         if mode == 0:
-            b = RamChunk(
-                await self.socket.read(
-                    message_format(
-                        READ,
-                        f"0x{format(obj_address + (self.offset * 0x3C), 'x')} {(len(self.item_locations) + 2) * 0x3C}",
-                    ),
-                ),
-            )
-            b.iterate(0x3C)
-            count = 0
-            for obj in b.split:
-                if obj[0] == 0xFF and obj[1] == 0xFF:
-                    count += 1
-            self.extra_items = count
-        else:
-            spawner_count = len([spawner for spawner in spawners[(self.current_level[1] << 4) + (self.current_level[0] if self.current_level[1] != 1 else castle_id.index(self.current_level[0]) + 1)] if self.difficulty >= spawner])
-            count = 0
-            for i in range((spawner_count + 99) // 100):
+            while True:
                 b = RamChunk(
                     await self.socket.read(
                         message_format(
                             READ,
-                            f"0x{format(obj_address + ((self.offset + len(self.item_locations) + self.extra_items + (i * 100)) * 0x3C), 'x')} {min((spawner_count - (100 * i)), 100) * 0x3C}",
+                            f"0x{format(OBJ_ADDR, 'x')} {(len(self.item_locations) + self.extra_items) * 0x3C}",
                         ),
                     ),
                 )
                 b.iterate(0x3C)
+                count = 0
                 for obj in b.split:
                     if obj[0] == 0xFF and obj[1] == 0xFF:
                         count += 1
-            self.extra_items += count
+                count -= self.extra_items
+                if count <= 0:
+                    break
+                self.extra_items = count
+        else:
+            spawner_count = len([spawner for spawner in spawners[(self.current_level[1] << 4) + (
+                self.current_level[0] if self.current_level[1] != 1 else castle_id.index(self.current_level[0]) + 1)] if
+                                 self.difficulty >= spawner])
+            if self.extra_spawners == 0:
+                count = 0
+                for i in range((spawner_count + 99) // 100):
+                    b = RamChunk(
+                        await self.socket.read(
+                            message_format(
+                                READ,
+                                f"0x{format(OBJ_ADDR + ((len(self.item_locations) + self.extra_items + (i * 100)) * 0x3C), 'x')} {min((spawner_count - (100 * i)), 100) * 0x3C}",
+                            ),
+                        ),
+                    )
+                    b.iterate(0x3C)
+                    for obj in b.split:
+                        if obj[0] == 0xFF and obj[1] == 0xFF:
+                            count += 1
+                self.extra_spawners += count
             b = RamChunk(
                 await self.socket.read(
                     message_format(
                         READ,
-                        f"0x{format(obj_address + ((self.offset + len(self.item_locations) + self.extra_items + spawner_count) * 0x3C), 'x')} {(len(self.chest_locations) + 2) * 0x3C}",
+                        f"0x{format(OBJ_ADDR + ((len(self.item_locations) + self.extra_items + self.extra_spawners + spawner_count) * 0x3C), 'x')} {(len(self.chest_locations) + 2) * 0x3C}",
                     ),
                 ),
             )
             b.iterate(0x3C)
         for arr in b.split:
             _obj += [ObjectEntry(arr)]
-        _obj = [obj for obj in _obj if obj.raw[0] != 0xFF or obj.raw[1] != 0xFF]
+        _obj = [obj for obj in _obj if obj.raw[0] != 0xFF and obj.raw[1] != 0xFF]
         if mode == 1:
             self.chest_objects = _obj[:len(self.chest_locations)]
         else:
@@ -608,15 +609,16 @@ class GauntletLegendsContext(CommonContext):
             level = [0x1, 0xF]
         self.current_level = level
         players = await self.active_players()
+        player_level = await self.player_level()
         if self.clear_counts.get(str(level), 0) != 0:
-            self.difficulty = players + (0 if level[1] != 2 else min(await self.player_level() // 10, 3))
+            self.difficulty = min(players + (min(player_level // vanilla[level[1]], 3)), 4)
         else:
             self.difficulty = players
         _id = level[0]
         if level[1] == 1:
             _id = castle_id.index(level[0]) + 1
         raw_locations = []
-        for location in level_locations.get((level[1] << 4) + _id, []):
+        for location in [location for location in level_locations.get((level[1] << 4) + _id, []) if self.difficulty >= location.difficulty]:
             if "Chest" in location.name:
                 if self.glslotdata["chests"]:
                     raw_locations += [location]
@@ -624,15 +626,14 @@ class GauntletLegendsContext(CommonContext):
                 if self.glslotdata["barrels"]:
                     raw_locations += [location]
             else:
-                if self.difficulty >= location.difficulty:
-                    raw_locations += [location]
+                raw_locations += [location]
         await ctx.send_msgs(
             [
                 {
                     "cmd": "LocationScouts",
                     "locations": [
                         location.id
-                        for location in raw_locations
+                        for location in [location for location in raw_locations if min(self.difficulty, self.glslotdata["max"]) >= location.difficulty]
                     ],
                     "create_as_hint": 0,
                 },
@@ -646,24 +647,29 @@ class GauntletLegendsContext(CommonContext):
             if "Obelisk" in items_by_id.get(item.item, ItemData(0, "", ItemClassification.filler)).item_name
                and item.player == self.slot
         ]
+        self.useful = [
+            item
+            for item in self.location_scouts
+            if "Obelisk" not in items_by_id.get(item.item, ItemData(0, "", ItemClassification.filler)).item_name
+                and (items_by_id.get(item.item, ItemData(0, "", ItemClassification.filler)).progression == ItemClassification.useful
+                or items_by_id.get(item.item, ItemData(0, "", ItemClassification.filler)).progression == ItemClassification.progression)
+                and item.player == self.slot
+        ]
         self.obelisk_locations = [
             location for location in raw_locations if location.id in [item.location for item in self.obelisks]
         ]
         self.item_locations = [
-            location
-            for location in raw_locations
-            if "Chest" not in location.name
-               and ("Barrel" not in location.name or "Barrel of Gold" in location.name)
-               and location not in self.obelisk_locations
+            location for location in raw_locations
+            if ("Chest" not in location.name
+                and ("Barrel" not in location.name or "Barrel of Gold" in location.name))
+                and location not in self.obelisk_locations
+                or location.id in [item.location for item in self.useful]
         ]
         self.chest_locations = [
-            location
-            for location in raw_locations
-            if "Chest" in location.name
-               or ("Barrel" in location.name and "Barrel of Gold" not in location.name)
-               and location not in self.obelisk_locations
-        ]
+            location for location in raw_locations
+            if location not in self.obelisk_locations and location not in self.item_locations]
         max_value: int = self.glslotdata['max']
+        logger.info(f"Items: {len(self.item_locations)} Chests: {len(self.chest_locations)} Obelisks: {len(self.obelisk_locations)}")
         logger.info(
             f"Locations: {len([location for location in self.obelisk_locations + self.item_locations + self.chest_locations if location.difficulty <= max_value and location.id not in self.locations_checked])} Difficulty: { max_value if self.glslotdata['instant_max'] else self.difficulty}",
         )
@@ -678,23 +684,19 @@ class GauntletLegendsContext(CommonContext):
         for i, obj in enumerate(self.item_objects):
             if obj.raw[24] != 0x0:
                 if self.item_locations[i].id not in self.locations_checked:
-                    self.locations_checked += [self.item_locations[i].id]
                     acquired += [self.item_locations[i].id]
         for j in range(len(self.obelisk_locations)):
             ob = await self.inv_bitwise("Obelisk", base_count[items_by_id[self.obelisks[j].item].item_name], 0)
             if ob:
-                self.locations_checked += [self.obelisk_locations[j].id]
                 acquired += [self.obelisk_locations[j].id]
         for k, obj in enumerate(self.chest_objects):
             if "Chest" in self.chest_locations[k].name:
                 if obj.raw[24] != 0x0:
                     if self.chest_locations[k].id not in self.locations_checked:
-                        self.locations_checked += [self.chest_locations[k].id]
                         acquired += [self.chest_locations[k].id]
             else:
                 if obj.raw[0x33] != 0:
                     if self.chest_locations[k].id not in self.locations_checked:
-                        self.locations_checked += [self.chest_locations[k].id]
                         acquired += [self.chest_locations[k].id]
         dead = await self.dead()
         if dead:
@@ -921,7 +923,8 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
                         continue
                     await asyncio.sleep(0.1)
                     checking = await ctx.location_loop()
-                    if checking:
+                    if len(checking) > 0:
+                        ctx.locations_checked += checking
                         await ctx.send_msgs([{"cmd": "LocationChecks", "locations": checking}])
                     bitwise = await ctx.inv_bitwise("Hell", 0x100, 0)
                     if not ctx.finished_game and bitwise:
