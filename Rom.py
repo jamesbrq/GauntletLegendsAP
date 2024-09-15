@@ -120,7 +120,7 @@ class GLPatchExtension(APPatchExtension):
                     continue
                 if "Mirror" in location_name:
                     continue
-                if "Obelisk" in location_name:
+                if "Obelisk" in location_name and "Obelisk" not in items_by_id[item[0]].item_name:
                     try:
                         index = [index for index in range(len(data.objects)) if data.objects[index][8] == 0x26][0]
                         data.items += [
@@ -142,7 +142,7 @@ class GLPatchExtension(APPatchExtension):
                     else:
                         data.items[j - data.items_replaced_by_obelisks][6:8] = [0x27, 0x4]
                 else:
-                    if "Obelisk" in items_by_id[item[0]].item_name:
+                    if "Obelisk" in items_by_id[item[0]].item_name and "Obelisk" not in location_name:
                         if chest_barrel(location_name):
                             slice_ = bytearray(data.chests[j - (len(data.items) + data.items_replaced_by_obelisks + data.chests_replaced_by_obelisks)][0:6])
                         else:
@@ -151,24 +151,11 @@ class GLPatchExtension(APPatchExtension):
                             slice_
                             + bytearray(
                                 [
-                                    0x0,
-                                    0x0,
-                                    0x26,
-                                    0x1,
-                                    0x0,
+                                    0x0, 0x0, 0x26, 0x1, 0x0,
                                     location_data[location_name].difficulty,
-                                    0x0,
-                                    0x0,
-                                    0x0,
+                                    0x0, 0x0, 0x0,
                                     item[0] - 77780054,
-                                    0x3F,
-                                    0x80,
-                                    0x0,
-                                    0x0,
-                                    0x0,
-                                    0x0,
-                                    0x0,
-                                    0x0,
+                                    0x3F, 0x80, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
                                 ],
                             ),
                         ]
