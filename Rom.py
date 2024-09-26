@@ -13,7 +13,7 @@ from settings import get_settings
 from worlds.Files import APPatchExtension, APProcedurePatch, APTokenMixin
 
 from .Arrays import item_dict, level_address, level_header, level_locations, level_size
-from .Items import items_by_id
+from .Items import items_by_id, ItemData
 from .Locations import location_data, GLLocation
 
 if typing.TYPE_CHECKING:
@@ -120,7 +120,7 @@ class GLPatchExtension(APPatchExtension):
                     continue
                 if "Mirror" in location_name:
                     continue
-                if "Obelisk" in location_name and "Obelisk" not in items_by_id[item[0]].item_name:
+                if "Obelisk" in location_name and "Obelisk" not in items_by_id.get(item[0], ItemData(0, "", ItemClassification.filler)).item_name:
                     try:
                         index = [index for index in range(len(data.objects)) if data.objects[index][8] == 0x26][0]
                         data.items += [
@@ -139,6 +139,8 @@ class GLPatchExtension(APPatchExtension):
                         "Barrel" in location_name and "Barrel of Gold" not in location_name
                     ):
                         data.chests[j - (len(data.items) + data.items_replaced_by_obelisks + data.chests_replaced_by_obelisks)][12:14] = [0x27, 0x4]
+                        if "Chest" in location_name:
+                            data.chests[j - (len(data.items) + data.items_replaced_by_obelisks + data.chests_replaced_by_obelisks)][9] = 0x1
                     else:
                         data.items[j - data.items_replaced_by_obelisks][6:8] = [0x27, 0x4]
                 else:
@@ -179,11 +181,11 @@ class GLPatchExtension(APPatchExtension):
                         data.chests_replaced_by_items += 1
                     else:
                         if chest_barrel(location_name):
-                            data.chests[j - (len(data.items) + data.items_replaced_by_obelisks + data.chests_replaced_by_obelisks)][12] = item_dict[item[0]][0]
-                            data.chests[j - (len(data.items) + data.items_replaced_by_obelisks + data.chests_replaced_by_obelisks)][13] = item_dict[item[0]][1]
+                            data.chests[j - (len(data.items) + data.items_replaced_by_obelisks + data.chests_replaced_by_obelisks)][12:14] = item_dict[item[0]]
+                            if "Chest" in location_name:
+                                data.chests[j - (len(data.items) + data.items_replaced_by_obelisks + data.chests_replaced_by_obelisks)][9] = 0x2
                         else:
-                            data.items[j - data.items_replaced_by_obelisks][6] = item_dict[item[0]][0]
-                            data.items[j - data.items_replaced_by_obelisks][7] = item_dict[item[0]][1]
+                            data.items[j - data.items_replaced_by_obelisks][6:8] = item_dict[item[0]]
             uncompressed = level_data_reformat(data)
             compressed = zenc(uncompressed)
             stream.seek(level_header[i] + 4, 0)
@@ -246,6 +248,11 @@ def patch_camp(data: LevelData) -> LevelData:
     data.stream.write(bytes([0xFE, 0x84, 0x0, 0x3D, 0xFF, 0xE0, 0xFF, 0xF0]))
     return data
 
+def patch_trenches(data: LevelData) -> LevelData:
+    data.stream.seek(0xD4, 0)
+    data.stream.write(bytes([0xFB, 0x29, 0x0, 0x82]))
+    return data
+
 
 # Zlib decompression with wbits set to -15
 def zdec(data):
@@ -283,6 +290,8 @@ def get_level_data(stream: io.BytesIO, size: int, level=0) -> (io.BytesIO, Level
         data = patch_docks(data)
     if level == 18:
         data = patch_camp(data)
+    if level == 23:
+        data = patch_trenches(data)
     data.header = data.stream.read(0x5C)
     data.stream.seek(0)
     data.item_addr = int.from_bytes(data.stream.read(4), "big")
