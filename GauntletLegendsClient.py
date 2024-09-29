@@ -10,6 +10,7 @@ import Utils
 from BaseClasses import ItemClassification
 from CommonClient import ClientCommandProcessor, CommonContext, get_base_parser, gui_enabled, logger, server_loop
 from NetUtils import ClientStatus, NetworkItem
+from Utils import user_path
 
 from .Arrays import (
     base_count,
@@ -287,8 +288,12 @@ class GauntletLegendsContext(CommonContext):
                 b = RamChunk(await self.socket.read(message_format(READ, f"0x{format(OBJ_ADDR + ((i * 100) * 0x3C), 'x')} {100 * 0x3C}")))
                 b.iterate(0x3C)
                 log_arr += [arr for arr in b.split]
-            output_folder = 'logs'
-            self.output_file = os.path.join(output_folder, f"({datetime.datetime.now().strftime('%Y-%m-%d - %I-%M-%S-%p')}) Gauntlet Legends RAMSTATE - {level_names[(self.current_level[1] << 4) + self.current_level[0]]}.txt")
+            output_folder = user_path("logs")
+            os.makedirs(output_folder, exist_ok=True)
+            _id = self.current_level[0]
+            if self.current_level[1] == 1:
+                _id = castle_id.index(self.current_level[0]) + 1
+            self.output_file = os.path.join(output_folder, f"({datetime.datetime.now().strftime('%Y-%m-%d - %I-%M-%S-%p')}) Gauntlet Legends RAMSTATE - {level_names[(self.current_level[1] << 4) + _id]}.txt")
             with open(self.output_file, 'w+') as f:
                 for i, arr in enumerate(log_arr):
                     f.write(f"0x{format(OBJ_ADDR + (0x3C * i), 'x')}: " + " ".join(f"{int(byte):02x}" for byte in arr) + '\n')
@@ -654,7 +659,7 @@ class GauntletLegendsContext(CommonContext):
             elif "Barrel" in location.name and "Barrel of Gold" not in location.name:
                 if self.glslotdata["barrels"]:
                     raw_locations += [location]
-            else:
+            elif "Mirror" not in location.name:
                 raw_locations += [location]
         await ctx.send_msgs(
             [
@@ -676,7 +681,6 @@ class GauntletLegendsContext(CommonContext):
             if "Obelisk" in items_by_id.get(item.item, ItemData(0, "", ItemClassification.filler)).item_name
                and item.player == self.slot
         ]
-        logger.info(f"Obelisks: {len(self.obelisks)}")
         self.useful = [
             item
             for item in self.location_scouts
@@ -688,7 +692,6 @@ class GauntletLegendsContext(CommonContext):
         self.obelisk_locations = [
             location for location in raw_locations if location.id in [item.location for item in self.obelisks]
         ]
-        logger.info(f"Obelisk Locations: {len(self.obelisk_locations)}")
         self.item_locations = [
             location for location in raw_locations
             if ("Chest" not in location.name
@@ -768,11 +771,10 @@ class GauntletLegendsContext(CommonContext):
         dead = await self.dead()
         boss = await self.boss()
         if portaling or dead or (self.current_level in boss_level and boss == 0):
-            if self.in_game:
-                if portaling or (self.current_level in boss_level and boss == 0):
-                    self.clear_counts[str(self.current_level)] = self.clear_counts.get(str(self.current_level), 0) + 1
-                    if self.current_level in mirror_levels:
-                        await ctx.send_msgs(
+            if portaling or (self.current_level in boss_level and boss == 0):
+                self.clear_counts[str(self.current_level)] = self.clear_counts.get(str(self.current_level), 0) + 1
+                if self.current_level in mirror_levels:
+                    await ctx.send_msgs(
                             [
                                 {
                                     "cmd": "LocationChecks",
@@ -786,14 +788,13 @@ class GauntletLegendsContext(CommonContext):
                                 },
                             ],
                         )
-                if dead and not (self.current_level in boss_level and boss == 0):
-                    if self.deathlink_triggered:
-                        self.deathlink_triggered = False
-                    elif self.ignore_deathlink:
-                        self.ignore_deathlink = False
-                    else:
-                        if self.deathlink_enabled:
-                            await ctx.send_death(f"{ctx.auth} didn't eat enough meat.")
+            if dead and not (self.current_level in boss_level and boss == 0):
+                if self.deathlink_triggered:
+                    self.deathlink_triggered = False
+                elif self.ignore_deathlink:
+                    self.ignore_deathlink = False
+                elif self.deathlink_enabled:
+                    await ctx.send_death(f"{ctx.auth} didn't eat enough meat.")
             self.var_reset()
             return True
         return False
@@ -852,7 +853,7 @@ class GauntletLegendsContext(CommonContext):
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
 
 
-async def _patch_and_run_game(patch_file: str):
+async def _patch_game(patch_file: str):
     metadata, output_file = Patch.create_rom_file(patch_file)
 
 
@@ -1000,6 +1001,10 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
                 logger.info("Connection Refused, Trying Again")
                 await asyncio.sleep(2)
                 continue
+            except ConnectionResetError:
+                logger.info("Connection Lost, Trying Again")
+                await asyncio.sleep(2)
+                continue
             except Exception as e:
                 logger.error(f"Unknown Error Occurred: {e}")
                 logger.info(traceback.format_exc())
@@ -1015,7 +1020,7 @@ def launch():
         parser.add_argument("patch_file", default="", type=str, nargs="?", help="Path to an APGL file")
         args = parser.parse_args()
         if args.patch_file:
-            await asyncio.create_task(_patch_and_run_game(args.patch_file))
+            await asyncio.create_task(_patch_game(args.patch_file))
         ctx = GauntletLegendsContext(args.connect, args.password)
         ctx.server_task = asyncio.create_task(server_loop(ctx), name="ServerLoop")
         if gui_enabled:
