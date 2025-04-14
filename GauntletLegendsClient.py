@@ -6,7 +6,6 @@ import traceback
 from typing import List, Optional
 
 import Patch
-import Utils
 from BaseClasses import ItemClassification
 from CommonClient import ClientCommandProcessor, CommonContext, get_base_parser, gui_enabled, logger, server_loop
 from NetUtils import ClientStatus, NetworkItem
@@ -161,7 +160,9 @@ class GauntletLegendsCommandProcessor(ClientCommandProcessor):
         logger.info(f"Retroarch Connected Status: {self.ctx.retro_connected}")
 
     def _cmd_deathlink_toggle(self):
+        """Toggle Deathlink on or off"""
         self.ctx.deathlink_enabled = not self.ctx.deathlink_enabled
+        self.ctx.update_death_link(self.ctx.deathlink_enabled)
         logger.info(f"Deathlink {'Enabled.' if self.ctx.deathlink_enabled else 'Disabled.'}")
 
     def _cmd_players(self, value: int):
@@ -531,10 +532,10 @@ class GauntletLegendsContext(CommonContext):
 
     def on_package(self, cmd: str, args: dict):
         if cmd in {"Connected"}:
-            self.slot = args["slot"]
             self.glslotdata = args["slot_data"]
             self.players = self.glslotdata["players"]
             self.deathlink_enabled = self.glslotdata["death_link"]
+            self.update_death_link(self.deathlink_enabled)
             self.var_reset()
             logger.info(f"Players set to {self.players}.")
             logger.info("If this is incorrect, Use /players to set the number of people playing locally.")
@@ -542,11 +543,7 @@ class GauntletLegendsContext(CommonContext):
             if "keys" not in args:
                 logger.warning(f"invalid Retrieved packet to GLClient: {args}")
                 return
-            cc = None
-            try:
-                cc = self.stored_data.get(f"gl_cc_T{self.team}_P{self.slot}", None)
-            except Exception:
-                logger.info(traceback.format_exc())
+            cc = self.stored_data.get(f"gl_cc_T{self.team}_P{self.slot}", None)
             if cc is not None:
                 logger.info("Received clear counts from server")
                 self.clear_counts = cc
@@ -724,7 +721,7 @@ class GauntletLegendsContext(CommonContext):
             if ob:
                 acquired += [self.obelisk_locations[j].id]
         for k, obj in enumerate(self.chest_objects):
-            if int.from_bytes(obj.raw[8:12], "little") != int.from_bytes(self.chest_objects_init[k].raw[8:12], "little"):
+            if int.from_bytes(obj.raw[0x30:0x34], "little") != 0:
                 if self.chest_locations[k].id not in self.locations_checked:
                     acquired += [self.chest_locations[k].id]
         paused = await self.paused()
@@ -839,15 +836,10 @@ class GauntletLegendsContext(CommonContext):
         self.socket.send(message_format(WRITE, param_format(SOUND_START, int.to_bytes(0x0, 4, "little"))))
         self.socket.send(message_format(WRITE, param_format(PLAYER_KILL, int.to_bytes(0x7, 1, "little"))))
 
-    def run_gui(self):
-        from kvui import GameManager
-
-        class GLManager(GameManager):
-            logging_pairs = [("Client", "Archipelago")]
-            base_title = "Archipelago Gauntlet Legends Client"
-
-        self.ui = GLManager(self)
-        self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
+    def make_gui(self):
+        ui = super().make_gui()
+        ui.base_title = "Archipelago Gauntlet Legends Client"
+        return ui
 
 
 async def _patch_game(patch_file: str):
@@ -958,7 +950,7 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
                     checking = await ctx.location_loop()
                     if len(checking) > 0:
                         ctx.locations_checked += checking
-                        await ctx.send_msgs([{"cmd": "LocationChecks", "locations": checking}])
+                        await ctx.check_locations(checking)
                 await asyncio.sleep(0.1)
             except TimeoutError:
                 logger.info("Connection Timed Out, Reconnecting")
@@ -1005,13 +997,8 @@ async def gl_sync_task(ctx: GauntletLegendsContext):
                 continue
 
 
-def launch():
-    Utils.init_logging("GauntletLegendsClient", exception_logger="Client")
-
-    async def main():
-        parser = get_base_parser()
-        parser.add_argument("patch_file", default="", type=str, nargs="?", help="Path to an APGL file")
-        args = parser.parse_args()
+def launch(*args):
+    async def main(args):
         if args.patch_file:
             await asyncio.create_task(_patch_game(args.patch_file))
         ctx = GauntletLegendsContext(args.connect, args.password)
@@ -1026,8 +1013,12 @@ def launch():
 
         await ctx.shutdown()
 
+    parser = get_base_parser()
+    parser.add_argument("patch_file", default="", type=str, nargs="?", help="Path to an APGL file")
+    args = parser.parse_args(args)
+
     import colorama
 
-    colorama.init()
-    asyncio.run(main())
+    colorama.just_fix_windows_console()
+    asyncio.run(main(args))
     colorama.deinit()

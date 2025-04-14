@@ -287,6 +287,47 @@ level_locations: Dict[int, List[LocationData]] = {
     0x113: infernal_fortress,
 }
 
+local_levels = [
+    castle_courtyard,
+    dungeon_of_torment,
+    tower_armory,
+    castle_treasury,
+    valley_of_fire,
+    dagger_peak,
+    cliffs_of_desolation,
+    lost_cave,
+    volcanic_cavern,
+    poisoned_fields,
+    haunted_cemetery,
+    venomous_spire,
+    toxic_air_ship,
+    gates_of_the_underworld,
+    arctic_docks,
+    frozen_camp,
+    crystal_mine,
+    erupting_fissure,
+    desecrated_temple,
+    battle_trenches,
+    battle_towers,
+    infernal_fortress,
+]
+
+skipped_local_locations = [
+    "Valley of Fire - Key 1",
+    "Valley of Fire - Key 5",
+    "Valley of Fire - Obelisk",
+    "Dagger Peak - Obelisk",
+    "Cliffs of Desolation - Obelisk",
+    "Castle Courtyard - Obelisk",
+    "Dungeon of Torment - Obelisk",
+    "Poisoned Fields - Obelisk",
+    "Haunted Cemetery - Obelisk",
+    "Dragon's Lair - Dragon Mirror Shard",
+    "Chimera's Keep - Chimera Mirror Shard",
+    "Vat of the Plague Fiend - Plague Fiend Mirror Shard",
+    "Yeti's Cavern - Yeti Mirror Shard"
+]
+
 level_names: Dict[int, str] = {
     0x11: "Castle Courtyard",
     0x12: "Dungeon of Torment",
@@ -305,6 +346,7 @@ level_names: Dict[int, str] = {
     0x74: "Toxic Air Ship",
     0x75: "Vat of the Plague Fiend",
     0x81: "Gates of the Underworld",
+    0x82: "Gates of the Underworld",
     0x91: "Arctic Docks",
     0x92: "Frozen Camp",
     0x93: "Crystal Mine",
@@ -318,7 +360,7 @@ level_names: Dict[int, str] = {
 
 # Count of all spawners in a level
 # Used for obj_read address offset calculation
-# Vaules are spawner difficulty
+# Values are spawner difficulty
 spawners: Dict[int, List[int]] = {
     0x11: [0, 0, 0, 4, 3, 2, 0, 0, 2, 4, 2, 0, 2, 4, 0, 3, 4, 4, 3, 0, 2, 0, 0, 3, 4, 0, 2, 2, 0, 3, 0, 4, 3, 0, 0, 2, 0, 2, 2, 4, 3, 0, 3, 2, 4, 2, 2, 2, 4, 0, 4, 3, 2, 0, 4, 0, 3, 3, 4, 2, 3, 0, 0, 0, 2, 3, 4, 2, 2, 2, 2, 0, 3, 2, 0, 2, 0, 0, 3, 0, 4, 2, 2, 0, 0, 0, 3, 0, 3, 0, 3, 3, 0, 0, 4, 4, 3, 0, 2, 0, 2, 3, 0, 4, 0, 2, 2, 0, 2, 4, 0, 2, 0, 3, 4, 0, 4, 3, 2, 0, 3, 0],
     0x12: [0, 0, 0, 2, 3, 2, 0, 2, 0, 2, 3, 0, 2, 0, 2, 0, 3, 2, 0, 3, 2, 0, 3, 0, 0, 2, 0, 3, 0, 0, 4, 3, 0, 0, 0, 2, 4, 3, 2, 2, 0, 0, 0, 0, 2, 2, 0, 2, 0, 3, 4, 3, 0, 0, 2, 2, 3, 3, 3, 2, 2, 4, 4, 4],
@@ -445,12 +487,12 @@ difficulty_convert: Dict[int, int] = {0x2: 0, 0x1: 10, 0x7: 20, 0x9: 30, 0xF: 35
 # Runestones required to access difficulties
 # Used in Rules.py for access calculation
 difficulty_lambda: Dict[int, List[int]] = {
-    0x2: [0, 1, 2, 3],
-    0x1: [0, 3, 4, 5],
-    0x7: [0, 6, 7, 8],
-    0x9: [0, 6, 7, 8],
+    0x2: [0, 0, 1, 2],
+    0x1: [0, 1, 2, 3],
+    0x7: [0, 3, 4, 5],
+    0x9: [0, 5, 6, 7],
     0xF: [0, 7, 8, 9],
-    0x11: [0, 9, 10, 11],
+    0x11: [0, 7, 8, 9],
     0x8: [0, 13, 13, 13],
 }
 
