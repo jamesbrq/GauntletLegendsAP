@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import os
@@ -21,12 +22,18 @@ if typing.TYPE_CHECKING:
 
 
 def get_base_rom_as_bytes() -> bytes:
+    """
+    Read the base ROM file and verify its MD5 hash.
+    Raises an exception if the ROM doesn't match the expected hash.
+    """
     try:
-        with open(get_settings().gl_options.rom_file, "rb") as infile:
+        from . import GauntletLegendsWorld
+        GauntletLegendsWorld.settings.rom_file.validate()
+        with open(GauntletLegendsWorld.settings.rom_file, "rb") as infile:
             base_rom_bytes = bytes(infile.read())
     except Exception:
         traceback.print_exc()
-
+        raise Exception('Failed to read ROM file. Check file path and permissions.')
     return base_rom_bytes
 
 
