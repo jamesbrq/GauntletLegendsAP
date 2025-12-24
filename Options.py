@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from Options import Choice, PerGameCommonOptions, StartInventoryPool, Toggle, Range, DeathLinkMixin
+from Options import Choice, PerGameCommonOptions, StartInventoryPool, Toggle, Range, DeathLinkMixin, DefaultOnToggle, \
+    OptionSet
 
 
 class PlayerCount(Range):
@@ -13,6 +14,18 @@ class PlayerCount(Range):
     range_start = 1
     range_end = 4
     default = 1
+
+
+class IncludedAreas(OptionSet):
+    """
+    Select which areas will have their locations included in the randomization pool.
+    Each selected area's stages and checks will be accessible in your world.
+    Unselected areas will not be included in the location pool.
+    Mountain is always available and cannot be excluded.
+    """
+    display_name = "Included Areas"
+    valid_keys = ["Castle", "Town", "Ice", "Battlefield"]
+    default = ["Castle", "Town", "Ice", "Battlefield"]
 
 
 class ChestBarrels(Choice):
@@ -31,7 +44,7 @@ class ChestBarrels(Choice):
     default = 3
 
 
-class Obelisks(Choice):
+class Obelisks(DefaultOnToggle):
     """
     Choose how you want Obelisks to be randomized.
     None: Obelisks will be placed in their own locations.
@@ -39,12 +52,9 @@ class Obelisks(Choice):
     """
 
     display_name = "Obelisks"
-    option_none = 0
-    option_all_obelisks = 1
-    default = 1
 
 
-class MirrorShards(Choice):
+class MirrorShards(DefaultOnToggle):
     """
     Choose how you want Mirror Shards to be randomized.
     None: Mirror Shards will be placed in their own locations.
@@ -52,9 +62,14 @@ class MirrorShards(Choice):
     """
 
     display_name = "Mirror Shards"
-    option_none = 0
-    option_all_shards = 1
-    default = 1
+
+class Portals(DefaultOnToggle):
+    """
+    Level portals will be added to the random pool as items.
+    Getting a portal item will unlock access to that level.
+    Levels will no longer unlock in succession when clearing the previous level.
+    """
+    display_name = "Portals"
 
 
 class MaxDifficultyToggle(Toggle):
@@ -127,15 +142,25 @@ class TrapsChoice(Choice):
 class TrapsFrequency(Range):
     """
     Choose the frequency of traps added into the item pool
-    Normal: 75 of each selected trap are added into the item pool.
-    Large: 150 of each selected trap are added into the item pool.
-    Extreme: 375 of each selected trap are added into the item pool.
+    This range is a percentage of all items in the pool that will be traps.
     """
 
     display_name = "Trap Frequency"
     range_start = 1
-    range_end = 90
+    range_end = 75
     default = 10
+
+
+class LocalFillerFrequency(Range):
+    """
+    Choose the frequency of filler items that will be placed locally in your world.
+    This range is a percentage of how many filler items will be locally placed before generation occurs.
+    """
+
+    display_name = "Local Filler Frequency"
+    range_start = 0
+    range_end = 75
+    default = 50
 
 
 class UnlockCharacterOne(Choice):
@@ -206,9 +231,11 @@ class UnlockCharacterFour(Choice):
 class GLOptions(DeathLinkMixin, PerGameCommonOptions):
     start_inventory_from_pool: StartInventoryPool
     local_players: PlayerCount
+    included_areas: IncludedAreas
     chests_barrels: ChestBarrels
     obelisks: Obelisks
     mirror_shards: MirrorShards
+    portals: Portals
     max_difficulty_toggle: MaxDifficultyToggle
     max_difficulty_value: MaxDifficultyRange
     instant_max: InstantMaxDifficulty
@@ -216,6 +243,7 @@ class GLOptions(DeathLinkMixin, PerGameCommonOptions):
     permanent_speed: PermaSpeed
     traps_choice: TrapsChoice
     traps_frequency: TrapsFrequency
+    local_filler_frequency: LocalFillerFrequency
     unlock_character_one: UnlockCharacterOne
     unlock_character_two: UnlockCharacterTwo
     unlock_character_three: UnlockCharacterThree
