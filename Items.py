@@ -3,7 +3,7 @@ from types import MappingProxyType
 from typing import Final, List
 
 from BaseClasses import Item, ItemClassification
-from worlds.gl.Data import item_classifications, portals, obelisks
+from .Data import item_classifications, portals, obelisks, mirror_shards
 
 
 class ItemData:
@@ -39,4 +39,5 @@ gauntlet_item_name_groups = {
     "Runestone": [f"Runestone {i}" for i in range(1, 14)],
     "Portal": portals.keys(),
     "Obelisk": obelisks,
+    "Mirror Shard": mirror_shards
 }
