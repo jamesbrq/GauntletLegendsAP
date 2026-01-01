@@ -4,18 +4,6 @@ from Options import Choice, PerGameCommonOptions, StartInventoryPool, Toggle, Ra
     OptionSet
 
 
-class PlayerCount(Range):
-    """
-    Select how many players will be playing this world locally.
-    If 3 players will be active then change this to 3, etc.
-    """
-
-    display_name = "Local Players"
-    range_start = 1
-    range_end = 4
-    default = 1
-
-
 class IncludedAreas(OptionSet):
     """
     Select which areas will have their locations included in the randomization pool.
@@ -46,9 +34,9 @@ class ChestBarrels(Choice):
 
 class Obelisks(DefaultOnToggle):
     """
-    Choose how you want Obelisks to be randomized.
-    None: Obelisks will be placed in their own locations.
-    All Obelisks: Obelisks will be shuffled into the item pool.
+    Obelisks will be added to the random pool as items.
+    Activating all of the obelisks in an area will unlock access to the next.
+    Disabling this will lock obelisks in their original locations.
     """
 
     display_name = "Obelisks"
@@ -56,12 +44,13 @@ class Obelisks(DefaultOnToggle):
 
 class MirrorShards(DefaultOnToggle):
     """
-    Choose how you want Mirror Shards to be randomized.
-    None: Mirror Shards will be placed in their own locations.
-    All Shards: Mirror Shards will be shuffled into the item pool.
+    Mirror Shards will be added to the random pool as items.
+    Collecting all four mirror shards will unlock access to the Desecrated Temple.
+    Disabling this will lock mirror shards in their original locations.
     """
 
     display_name = "Mirror Shards"
+
 
 class Portals(DefaultOnToggle):
     """
@@ -72,22 +61,36 @@ class Portals(DefaultOnToggle):
     display_name = "Portals"
 
 
-class MaxDifficultyToggle(Toggle):
+class Goal(Choice):
     """
-    Set all stages to have a maximum difficulty.
-    All locations with a difficulty higher than what is set will be excluded from the pool of locations.
-    Default max difficulty is 4.
+    Choose your objective required to goal.
+    Defeat Skorne: Collect all 13 stones to unlock and defeat Skorne in the Underworld.
+    Defeat X Bosses: Defeat X number of bosses to goal.
     """
 
-    display_name = "Change Max Difficulty"
+    display_name = "Goal"
+    option_defeat_skorne = 1
+    option_defeat_x_bosses =2
+    default = 1
 
 
-class MaxDifficultyRange(Range):
+class BossGoalCount(Range):
+    """
+    Choose how many bosses you must defeat to goal if 'Defeat X Bosses' is selected as your goal.
+    This includes both Temple and Underworld Skorne.
+    """
+
+    display_name = "Boss Goal Count"
+    range_start = 1
+    range_end = 6
+    default = 6
+
+
+class MaxDifficulty(Range):
     """
     Select the difficulty value you want to be the maximum.
-    This does nothing if Change Max Difficulty is set to false.
-    This value has a minimum based on how many local players you have.
-    If you have 3 local players, this will be adjusted to be at least 3.
+    This will affect the ammount of checks in each level as well as enemy strength and number of spawners.
+
     """
 
     display_name = "Max Difficulty Value"
@@ -99,8 +102,8 @@ class MaxDifficultyRange(Range):
 class InstantMaxDifficulty(Toggle):
     """
     All stages will load with their max difficulty on the first run through.
-    By default, stages increase in difficulty by 1 every 5 player levels.
-    The starting level for each area increases gradually as you would progress in vanilla.
+    By default, stages increase in difficulty by 1 at a set interval that changes per zone.
+    The starting level for each zone increases gradually as you would progress in vanilla.
     """
 
     display_name = "Instant Max Difficulty"
@@ -122,21 +125,15 @@ class InfiniteKeys(Toggle):
     display_name = "Infinite Keys"
 
 
-class TrapsChoice(Choice):
+class IncludedTraps(OptionSet):
     """
     Choose what traps will be put in the item pool.
-    All Active: Both Death and Poison Fruit will be added to the item pool.
-    Only Death: Death will be added to the item pool.
-    Only Fruit: Poison Fruit will be added to the item pool.
-    None Active: No Traps will be added to the item pool.
+    Valid Keys: Death, Poison Fruit, Crossbow Shooter, Bomb Thrower, Bomb Runner, Golem
     """
 
-    display_name = "Active Traps"
-    option_all_active = 0
-    option_only_death = 1
-    option_only_fruit = 2
-    option_none_active = 3
-    default = 0
+    display_name = "Included Traps"
+    valid_keys = ["Death", "Poison Fruit", "Crossbow Shooter", "Bomb Thrower", "Bomb Runner", "Golem"]
+    default = ["Death", "Poison Fruit", "Crossbow Shooter", "Bomb Thrower", "Bomb Runner", "Golem"]
 
 
 class TrapsFrequency(Range):
@@ -230,18 +227,18 @@ class UnlockCharacterFour(Choice):
 @dataclass
 class GLOptions(DeathLinkMixin, PerGameCommonOptions):
     start_inventory_from_pool: StartInventoryPool
-    local_players: PlayerCount
     included_areas: IncludedAreas
     chests_barrels: ChestBarrels
     obelisks: Obelisks
     mirror_shards: MirrorShards
     portals: Portals
-    max_difficulty_toggle: MaxDifficultyToggle
-    max_difficulty_value: MaxDifficultyRange
+    goal: Goal
+    boss_goal_count: BossGoalCount
+    max_difficulty: MaxDifficulty
     instant_max: InstantMaxDifficulty
     infinite_keys: InfiniteKeys
     permanent_speed: PermaSpeed
-    traps_choice: TrapsChoice
+    included_traps: IncludedTraps
     traps_frequency: TrapsFrequency
     local_filler_frequency: LocalFillerFrequency
     unlock_character_one: UnlockCharacterOne

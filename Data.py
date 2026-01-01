@@ -2,7 +2,6 @@ from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Final
 
-from BaseClasses import ItemClassification
 from .Locations import LocationData, get_locations_by_tags
 
 # Item name to ram value conversion
@@ -74,6 +73,11 @@ item_ids: Final[Mapping[str, int]] = MappingProxyType({
     "Skorne's Horns": 0x840630,
     "Skorne's Right Gauntlet": 0x840A40,
     "Skorne's Left Gauntlet": 0x840A50,
+    "Death": 0x0000F0,
+    "Crossbow Shooter": 0x0000F1,
+    "Bomb Thrower": 0x0000F2,
+    "Bomb Runner": 0x0000F3,
+    "Golem": 0x0000F4,
 })
 
 # Character names used for slot data
@@ -172,7 +176,12 @@ base_count: Final[Mapping[str, int]] = MappingProxyType({
     "Portal to Erupting Fissure": 3,
     "Portal to Yeti's Cavern": 5,
     "Portal to Fortified Towers": 1,
-    "Portal to Infernal Fortress": 2
+    "Portal to Infernal Fortress": 2,
+    "Death": 1,
+    "Crossbow Shooter": 1,
+    "Bomb Thrower": 1,
+    "Bomb Runner": 1,
+    "Golem": 1
 })
 
 # (zone_config << 4) + room_config -> location list
@@ -218,47 +227,6 @@ level_locations: Final[Mapping[int, Sequence[LocationData]]] = MappingProxyType(
     0xC1: get_locations_by_tags("fortified_towers"),
     0xC2: get_locations_by_tags("infernal_fortress"),
 })
-
-local_levels: Final[Sequence[Sequence[LocationData]]] = (
-    get_locations_by_tags("castle_courtyard"),
-    get_locations_by_tags("dungeon_of_torment"),
-    get_locations_by_tags("tower_armory"),
-    get_locations_by_tags("castle_treasury"),
-    get_locations_by_tags("valley_of_fire"),
-    get_locations_by_tags("dagger_peak"),
-    get_locations_by_tags("cliffs_of_desolation"),
-    get_locations_by_tags("lost_cave"),
-    get_locations_by_tags("volcanic_cavern"),
-    get_locations_by_tags("poisoned_fields"),
-    get_locations_by_tags("haunted_cemetery"),
-    get_locations_by_tags("venomous_spire"),
-    get_locations_by_tags("toxic_air_ship"),
-    get_locations_by_tags("gates_of_the_underworld"),
-    get_locations_by_tags("arctic_docks"),
-    get_locations_by_tags("frozen_camp"),
-    get_locations_by_tags("crystal_mine"),
-    get_locations_by_tags("erupting_fissure"),
-    get_locations_by_tags("desecrated_temple"),
-    get_locations_by_tags("battle_trenches"),
-    get_locations_by_tags("fortified_towers"),
-    get_locations_by_tags("infernal_fortress")
-)
-
-skipped_local_locations: Final[tuple[str, ...]] = (
-    "Valley of Fire - Key 1",
-    "Valley of Fire - Key 5",
-    "Valley of Fire - Obelisk",
-    "Dagger Peak - Obelisk",
-    "Cliffs of Desolation - Obelisk",
-    "Castle Courtyard - Obelisk",
-    "Dungeon of Torment - Obelisk",
-    "Poisoned Fields - Obelisk",
-    "Haunted Cemetery - Obelisk",
-    "Dragon's Lair - Dragon Mirror Shard",
-    "Chimera's Keep - Chimera Mirror Shard",
-    "Vat of the Plague Fiend - Plague Fiend Mirror Shard",
-    "Yeti's Cavern - Yeti Mirror Shard"
-)
 
 # Compressed level size in ROM
 level_size: Final[tuple[int, ...]] = (
@@ -356,13 +324,13 @@ level_header: Final[tuple[int, ...]] = (
 # Runestones required to access difficulties
 # Used in Rules.py for access calculation
 difficulty_lambda: Final[Mapping[int, Sequence[int]]] = MappingProxyType({
-    0x3: (0, 1, 2, 3),
-    0x0: (0, 3, 4, 5),
-    0x7: (0, 5, 6, 7),
-    0x6: (0, 7, 8, 9),
-    0xD: (0, 9, 10, 11),
-    0xC: (0, 11, 12, 13),
-    0x5: (0, 13, 13, 13)
+    0x3: (0, 2, 3, 4),
+    0x0: (0, 5, 6, 7),
+    0x7: (0, 8, 9, 10),
+    0x6: (0, 11, 12, 13),
+    0xD: (0, 14, 15, 16),
+    0xC: (0, 17, 18, 19),
+    0x5: (0, 20, 21, 22)
 })
 
 # ID's for names said by announcer
@@ -384,13 +352,6 @@ colors: Final[Mapping[int, int]] = MappingProxyType({
     1: 0xA6,
     2: 0x9C,
     3: 0xA4
-})
-
-item_classifications: Final[Mapping[str, ItemClassification]] = MappingProxyType({
-    "filler": ItemClassification.filler,
-    "useful": ItemClassification.useful,
-    "progression": ItemClassification.progression,
-    "trap": ItemClassification.trap
 })
 
 obelisks: Final[tuple[str, ...]] = (
@@ -465,3 +426,22 @@ boss_location_offsets: Final[Mapping[str, int]] = MappingProxyType({
     "Altar of Skorne - Skorne's Right Gauntlet": 0x9C78
 })
 
+boss_regions: Final[tuple[str, ...]] = (
+    "Dragon's Lair",
+    "Yeti's Cavern",
+    "Chimera's Keep",
+    "Vat of the Plague Fiend",
+    "Altar of Skorne",
+    "Gates of the Underworld",
+)
+
+
+# Item IDs for spawner traps (77780087-77780090)
+spawner_trap_ids: Final[tuple[int, ...]] = (77780087, 77780088, 77780089, 77780090)
+
+player_compass_index: Final[Mapping[int, int]] = MappingProxyType({
+    1: 1,
+    2: 0,
+    3: 3,
+    4: 2
+})
