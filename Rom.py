@@ -7,6 +7,8 @@ import typing
 import zlib
 from random import Random
 
+import bsdiff4
+
 import Utils
 from BaseClasses import Location, ItemClassification
 
@@ -184,6 +186,11 @@ class GLPatchExtension(APPatchExtension):
         rom[0x10:0x14] = crc1.to_bytes(4, "big")
         rom[0x14:0x18] = crc2.to_bytes(4, "big")
         return bytes(rom)
+
+
+    @staticmethod
+    def apply_bsdiff4(caller: APProcedurePatch, rom: bytes, patch: str) -> bytes:
+        return bsdiff4.patch(rom, pkgutil.get_data(__name__, f"data/basepatch.bsdiff4"))
 
     # Decompress all levels, place all items in the levels.
     @staticmethod
