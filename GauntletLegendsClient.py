@@ -143,12 +143,14 @@ class GauntletLegendsContext(CommonContext):
         self.vanilla_spawner_count: int = 0
         self.zone: int = 0
         self.level: int = 0
-        self.current_zone: int = 0
-        self.current_level: int = 0
+        self.current_zone: int = -1
+        self.current_level: int = -1
         self.level_id: int = 0
         self.location_scouts: list[NetworkItem] = []
         self.players: list[int] = []
         self.queued_traps: list[tuple[str, int, bool]] = []
+        self.item_ram_indices: dict[int, int] = {}
+        self.chest_ram_indices: dict[int, int] = {}
 
     def on_deathlink(self, data: dict):
         super().on_deathlink(data)
@@ -272,6 +274,8 @@ class GauntletLegendsContext(CommonContext):
             self.useful = []
             self.obelisks = []
             self.vanilla_spawner_count = 0
+            self.item_ram_indices = {}
+            self.chest_ram_indices = {}
 
             raw_locations = [location for location in level_locations.get(self.level_id, []) if
                              "Mirror" not in location.name and "Skorne" not in location.name]
@@ -291,11 +295,83 @@ class GauntletLegendsContext(CommonContext):
             # Build lookup for scouted items by location
             scouted_by_location = {item.location: item for item in self.location_scouts}
 
+            # Build RAM array index maps over ALL raw_locations (including dif-variant slots not
+            # in the multiworld). Spawners occupy a separate array and are excluded. Every other
+            # location takes a fixed slot in either the item or chest array regardless of whether
+            # it's in the multiworld, so all must be counted to get correct offsets.
+            item_slots: list[int] = []
+            chest_slots: list[int] = []
+            appended_items: list[int] = []
+
+            for loc in raw_locations:
+                is_obelisk_loc = "Obelisk" in loc.name
+                is_chest_loc = (not is_obelisk_loc) and (
+                        "Chest" in loc.name
+                        or ("Barrel" in loc.name and "Barrel of Gold" not in loc.name)
+                )
+
+                scouted = scouted_by_location.get(loc.id)
+
+                if not scouted:
+                    if is_obelisk_loc:
+                        pass
+                    elif is_chest_loc:
+                        chest_slots.append(loc.id)
+                    else:
+                        item_slots.append(loc.id)
+                    continue
+
+                item_id = scouted.item
+                item_player = scouted.player
+                item_data = items_by_id.get(item_id, ItemData())
+
+                if is_obelisk_loc:
+                    if "Obelisk" in item_data.item_name and item_player == self.slot:
+
+                        pass
+                    else:
+
+                        appended_items.append(loc.id)
+                    continue
+
+                if item_player == self.slot and item_id in spawner_trap_ids:
+                    continue
+
+                if item_player != self.slot:
+
+                    if is_chest_loc:
+                        chest_slots.append(loc.id)
+                    else:
+                        item_slots.append(loc.id)
+                    continue
+
+                if "Obelisk" in item_data.item_name:
+                    continue
+
+                if (item_data.progression in (ItemClassification.useful, ItemClassification.progression)
+                        and is_chest_loc):
+                    appended_items.append(loc.id)
+                    continue
+
+                if is_chest_loc:
+                    chest_slots.append(loc.id)
+                else:
+                    item_slots.append(loc.id)
+
+            final_item_order = item_slots + appended_items
+
+            self.item_ram_indices = {
+                loc_id: idx for idx, loc_id in enumerate(final_item_order)
+            }
+            self.chest_ram_indices = {
+                loc_id: idx for idx, loc_id in enumerate(chest_slots)
+            }
+
             # Categorize scouted locations - mirror ROM's patch_items logic exactly
             for loc in raw_locations:
                 scouted_item = scouted_by_location.get(loc.id)
                 if not scouted_item:
-                    continue  # No item at this location (item[0] == 0 in ROM)
+                    continue
 
                 item_id = scouted_item.item
                 item_player = scouted_item.player
@@ -307,8 +383,9 @@ class GauntletLegendsContext(CommonContext):
                     if "Obelisk" in item_data.item_name and item_player == self.slot:
                         self.obelisk_locations.append(loc.id)
                         self.obelisks.append(scouted_item)
-                        continue
-                    # Non-obelisk item at obelisk location — fall through to item categorization
+                    else:
+                        self.item_locations.append(loc.id)
+                    continue
 
                 # Check spawner (ROM: item[1] == player and item[0] in SPAWNER_TRAP_IDS)
                 if item_player == self.slot and item_id in spawner_trap_ids:
@@ -346,7 +423,7 @@ class GauntletLegendsContext(CommonContext):
             logger.error(traceback.format_exc())
 
     async def location_loop(self) -> list[int]:
-        if self.current_zone == 0:
+        if self.current_zone == -1:
             self.current_zone = self.zone
             self.current_level = self.level
             self.level_id = (self.current_zone << 4) + self.current_level
@@ -402,9 +479,10 @@ class GauntletLegendsContext(CommonContext):
 
         acquired = []
 
-        item_section = await self._read_ram(self.item_address, len(self.item_locations) * 0x18)
-        for i, loc_id in enumerate(self.item_locations):
-            offset = i * 0x18
+        max_item_idx = max((self.item_ram_indices[loc_id] for loc_id in self.item_locations), default=-1)
+        item_section = await self._read_ram(self.item_address, (max_item_idx + 1) * 0x18) if max_item_idx >= 0 else b""
+        for loc_id in self.item_locations:
+            offset = self.item_ram_indices[loc_id] * 0x18
             active_byte, state = item_section[offset + 0x2], item_section[offset + 0x3]
             if state < 0x7F and active_byte == 1 and state == 0:
                 acquired.append(loc_id)
@@ -415,9 +493,10 @@ class GauntletLegendsContext(CommonContext):
             if obelisk & (1 << bit):
                 acquired.append(loc_id)
 
-        chest_section = await self._read_ram(self.chest_address, len(self.chest_locations) * 0x18)
-        for i, loc_id in enumerate(self.chest_locations):
-            offset = i * 0x18
+        max_chest_idx = max((self.chest_ram_indices[loc_id] for loc_id in self.chest_locations), default=-1)
+        chest_section = await self._read_ram(self.chest_address, (max_chest_idx + 1) * 0x18) if max_chest_idx >= 0 else b""
+        for loc_id in self.chest_locations:
+            offset = self.chest_ram_indices[loc_id] * 0x18
             active_byte, state = chest_section[offset + 0x2], chest_section[offset + 0x3]
             if state < 0x7F and active_byte == 1 and state != 1:
                 acquired.append(loc_id)
@@ -429,12 +508,14 @@ class GauntletLegendsContext(CommonContext):
             spawner_section = await self._read_ram(spawner_start, len(self.spawner_locations) * 0x1C)
             for i, loc_id in enumerate(self.spawner_locations):
                 offset = i * 0x1C
-                active_byte, state, hit = spawner_section[offset + 0x2], spawner_section[offset + 0x3], spawner_section[offset + 0x1A]
+                active_byte, hit = spawner_section[offset + 0x2], spawner_section[offset + 0x1A]
                 if active_byte == 1 and hit == 1:
                     acquired.append(loc_id)
 
         await self.update_stage()
-        return [] if self.zone != self.current_zone or self.level != self.current_level else acquired
+        if self.zone != self.current_zone or self.level != self.current_level:
+            return []
+        return [loc_id for loc_id in acquired if loc_id not in self.checked_locations]
 
     async def die(self):
         """Trigger deathlink death with character-specific death sound."""
